@@ -2,6 +2,17 @@
 
 Browser-to-phone bridge built with Twilio Client SDK v1.13 and Node.js.
 
+## Features
+
+- ✅ One-click call from browser → PSTN
+- ✅ Automatic bridge back to the browser when the callee answers
+- ✅ Zero ringtone in the browser (`sounds: false`)
+- ✅ End-call button and live status display
+- ✅ 12-button DTMF keypad (0-9, *, #) for phone-tree navigation
+- ✅ **Hang-up & Redial** - Automatically redials after configurable delay
+- ✅ Minimal code: single `server.js` + `public/index.html`
+
+![Appscreenshot](./screenshot.png)
 
 
 ## Environment Variables
@@ -27,8 +38,10 @@ PORT=3000                                            # Local server port (option
 
 # Default Number (optional)
 NUMBER_TO_CALL=+1xxxxxxxxxx                         # Pre-fill phone number field (optional)
-```
 
+# Redial Configuration
+REDIAL_DELAY_MS=60000                                # Auto-redial delay in milliseconds (60000 = 1 minute)
+```
 
 ## Quick Start
 
@@ -55,7 +68,9 @@ open https://<your-ngrok>.ngrok-free.app
 
 1. Enter a phone number in E.164 format (`+1…`) and press **Call**
 2. When the call connects, the page shows "Connected – speak!"
-3. Use the keypad to send menu options, or press **End Call** to hang up
+3. Use the **DTMF keypad** to send menu options (0-9, *, #)
+4. Press **End Call** to hang up manually
+5. Use **Hang-up & Redial** to automatically hang up and redial after the configured delay (see `REDIAL_DELAY_MS`)
 
 ## Folder Structure
 
@@ -65,3 +80,11 @@ public/
   └── index.html     # Front-end UI and Twilio Client logic
 .env.example         # Sample environment file
 README.md            # This file
+```
+
+## Setup Notes
+
+- **TwiML App**: Create a new TwiML App in your Twilio Console and set the webhook URL to `{SERVER_URL}/twiml?client=browserUser`
+- **ngrok**: Use `ngrok http 3000` to expose your local server to the internet for Twilio webhooks
+- **HTTPS Required**: Twilio requires HTTPS for webhooks and WebRTC functionality
+- **Redial Timing**: Adjust `REDIAL_DELAY_MS` to control how long to wait before automatically redialing (default: 60 seconds)

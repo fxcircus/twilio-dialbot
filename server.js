@@ -1,30 +1,29 @@
-// server.js ─────────────────────────────────────────────
+// server.js ───────────────────────────────────────────
 const express = require('express');
 const bodyParser = require('body-parser');
-const twilio = require('twilio');
+const twilio  = require('twilio');
 require('dotenv').config();
 
 const app = express();
 app.use(bodyParser.json());
-app.use(express.static('public')); // serve index.html
+app.use(express.static('public'));
 
-// ── env vars ───────────────────────────
 const {
   TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN,
   TWILIO_API_KEY_SID,
   TWILIO_API_KEY_SECRET,
   TWILIO_NUMBER,
-  SERVER_URL // e.g. https://xxxx.ngrok-free.app
+  SERVER_URL,
+  REDIAL_DELAY_MS = 60000          // fallback 60 s
 } = process.env;
 
-// Twilio helper instances
-const twilioRest = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-const AccessToken = twilio.jwt.AccessToken;
-const VoiceGrant = AccessToken.VoiceGrant;
+const twilioRest   = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+const AccessToken  = twilio.jwt.AccessToken;
+const VoiceGrant   = AccessToken.VoiceGrant;
 
-// 1️⃣ Capability Token for Twilio Client
-app.get('/token', (req, res) => {
+// ── 1. Capability token ──────────────────────────────
+app.get('/token', (_req, res) => {
   const token = new AccessToken(
     TWILIO_ACCOUNT_SID,
     TWILIO_API_KEY_SID,
@@ -35,14 +34,19 @@ app.get('/token', (req, res) => {
   res.json({ token: token.toJwt() });
 });
 
-// 2️⃣ Make the outbound PSTN call
+// ── 2. Config endpoint (sends redial delay) ──────────
+app.get('/config', (_req, res) =>
+  res.json({ redialDelayMs: Number(REDIAL_DELAY_MS) })
+);
+
+// ── 3. Start outbound call ───────────────────────────
 app.post('/call', async (req, res) => {
+  const { phoneNumber } = req.body;
   try {
-    const { phoneNumber } = req.body;
     const call = await twilioRest.calls.create({
-      to: phoneNumber,
+      to:   phoneNumber,
       from: TWILIO_NUMBER,
-      url: `${SERVER_URL}/twiml?client=browserUser`
+      url:  `${SERVER_URL}/twiml?client=browserUser`
     });
     res.json({ callSid: call.sid });
   } catch (e) {
@@ -50,10 +54,10 @@ app.post('/call', async (req, res) => {
   }
 });
 
-// 3️⃣ End the call
+// ── 4. End call manually ─────────────────────────────
 app.post('/end-call', async (req, res) => {
+  const { callSid } = req.body;
   try {
-    const { callSid } = req.body;
     await twilioRest.calls(callSid).update({ status: 'completed' });
     res.json({ ok: true });
   } catch (e) {
@@ -61,14 +65,14 @@ app.post('/end-call', async (req, res) => {
   }
 });
 
-// 4️⃣ TwiML that bridges PSTN leg → browser client
+// ── 5. TwiML bridge ──────────────────────────────────
 app.post('/twiml', (req, res) => {
-  const clientName = req.query.client || 'browserUser';
+  const client = req.query.client || 'browserUser';
   const vr = new twilio.twiml.VoiceResponse();
-  vr.dial().client(clientName);
+  vr.dial().client(client);
   res.type('text/xml').send(vr.toString());
 });
 
-// ── start ───────────────────────────────
+// ── Start server ─────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server on ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on ${PORT}`));
