@@ -4,16 +4,13 @@ Browser-to-phone bridge built with Twilio Client SDK v1.13 and Node.js.
 
 ## Features
 
-- ✅ One-click call from browser → PSTN
+- ✅ One-click call from browser
 - ✅ Automatic bridge back to the browser when the callee answers
-- ✅ Zero ringtone in the browser (`sounds: false`)
 - ✅ End-call button and live status display
-- ✅ 12-button DTMF keypad (0-9, *, #) for phone-tree navigation
+- ✅ 12-button keypad (0-9, *, #) for phone-tree navigation
 - ✅ **Hang-up & Redial** - Automatically redials after configurable delay
-- ✅ Minimal code: single `server.js` + `public/index.html`
 
 ![Appscreenshot](./screenshot.png)
-
 
 ## Environment Variables
 
@@ -47,7 +44,7 @@ REDIAL_DELAY_MS=60000                                # Auto-redial delay in mill
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/your-user/twilio-dial-bridge.git
+git clone https://github.com/fxcircus/twilio-dialbot
 cd twilio-dial-bridge
 npm install
 
