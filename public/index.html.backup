@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Roy Phone Server</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☎️</text></svg>">
+    <!-- Version for cache busting: v2.0 -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #f0f0f0;
+        }
+        input, button {
+            padding: 10px;
+            margin: 10px 0;
+            width: 100%;
+        }
+        button {
+            background-color: #0c8;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #errorBanner {
+            display: none;
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <h1>Twilio Client - DMV Call Demo</h1>
+    
+    <!-- Error banner for displaying errors to users -->
+    <div id="errorBanner"></div>
+    
+    <!-- Status display -->
+    <div id="status">Loading Twilio Device...</div>
+    
+    <!-- Phone input and call button -->
+    <input id="phone" type="tel" placeholder="+1##########" />
+    <button id="callBtn" disabled>Call DMV</button>
+    <button id="endCallBtn" disabled style="background-color: #d9534f;">End Call</button>
+    
+    <!-- Load Twilio Client SDK -->
+    <script src="https://sdk.twilio.com/js/client/v1.13/twilio.min.js"></script>
+    
+    <!-- Global Error Handler -->
+    <script>
+        // Initialize error tracking immediately
+        (function() {
+            // Error tracking state
+            window.errorTracker = {
+                errors: [],
+                lastErrorTime: 0,
+                isReporting: false,
+                maxReportingFrequency: 2000, // ms between sending errors
+                errorBanner: null,
+                initialized: false
+            };
+            
+            // Initialize error tracking
+            function initErrorTracking() {
+                if (errorTracker.initialized) return;
+                
+                console.log('Initializing error tracking...');
+                errorTracker.errorBanner = document.getElementById('errorBanner');
+                errorTracker.initialized = true;
+                
+                // Handle uncaught exceptions
+                window.onerror = function(message, source, line, column, error) {
+                    handleError({
+                        type: 'exception',
+                        message,
+                        source,
+                        line,
+                        column,
+                        stack: error ? error.stack : null
+                    });
+                    return false; // Let default handler run
+                };
+                
+                // Handle unhandled promise rejections
+                window.addEventListener('unhandledrejection', function(event) {
+                    const error = event.reason;
+                    handleError({
+                        type: 'promise',
+                        message: error ? (error.message || String(error)) : 'Unknown Promise Error',
+                        source: error && error.fileName ? error.fileName : window.location.href,
+                        line: error && error.lineNumber ? error.lineNumber : 0,
+                        column: error && error.columnNumber ? error.columnNumber : 0,
+                        stack: error && error.stack ? error.stack : null
+                    });
+                });
+                
+                // Handle React error boundaries if React is used
+                if (window.React) {
+                    class ErrorBoundary extends React.Component {
+                        componentDidCatch(error, errorInfo) {
+                            handleError({
+                                type: 'react',
+                                message: error.message,
+                                stack: error.stack,
+                                componentStack: errorInfo.componentStack
+                            });
+                        }
+                        render() {
+                            return this.props.children;
+                        }
+                    }
+                    window.ErrorBoundary = ErrorBoundary;
+                }
+                
+                console.log('Error tracking initialized');
+            }
+            
+            // Make handleError available globally
+            window.handleError = function(errorData) {
+                // Enhance error with additional info
+                errorData.url = window.location.href;
+                errorData.userAgent = navigator.userAgent;
+                errorData.timestamp = new Date().toISOString();
+                
+                // Log to console with formatting
+                console.group('%c Client Error Detected', 'color: red; font-weight: bold;');
+                console.error('Error:', errorData.message);
+                console.error('Location:', `${errorData.source}:${errorData.line}:${errorData.column}`);
+                if (errorData.stack) {
+                    console.error('Stack:', errorData.stack);
+                }
+                console.groupEnd();
+                
+                // Show in UI
+                showErrorInUI(errorData);
+                
+                // Track error
+                errorTracker.errors.push(errorData);
+                
+                // Report to server with rate limiting
+                const now = Date.now();
+                if (!errorTracker.isReporting && now - errorTracker.lastErrorTime > errorTracker.maxReportingFrequency) {
+                    reportErrorsToServer();
+                }
+            };
+            
+            // Display error in UI
+            function showErrorInUI(errorData) {
+                if (!errorTracker.errorBanner) return;
+                
+                // Simple message for users
+                const userMessage = `Error: ${errorData.message}`;
+                errorTracker.errorBanner.textContent = userMessage;
+                errorTracker.errorBanner.style.display = 'block';
+                
+                // Auto-hide after 10 seconds
+                setTimeout(() => {
+                    errorTracker.errorBanner.style.display = 'none';
+                }, 10000);
+            }
+            
+            // Send errors to the server
+            async function reportErrorsToServer() {
+                if (errorTracker.errors.length === 0) return;
+                
+                errorTracker.isReporting = true;
+                errorTracker.lastErrorTime = Date.now();
+                
+                const errorsToReport = [...errorTracker.errors];
+                errorTracker.errors = [];
+                
+                try {
+                    const response = await fetch('/log-client-error', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(errorsToReport.length === 1 ? errorsToReport[0] : { errors: errorsToReport })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Server responded with ${response.status}`);
+                    }
+                    
+                    console.log('Errors reported to server successfully');
+                } catch (error) {
+                    console.error('Failed to report errors to server:', error);
+                    // Put errors back in the queue for retry
+                    errorTracker.errors = [...errorsToReport, ...errorTracker.errors];
+                } finally {
+                    errorTracker.isReporting = false;
+                    
+                    // If more errors accumulated during reporting, report them after a delay
+                    if (errorTracker.errors.length > 0) {
+                        setTimeout(reportErrorsToServer, errorTracker.maxReportingFrequency);
+                    }
+                }
+            }
+            
+            // Set up the initialization to run when DOM is loaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initErrorTracking);
+            } else {
+                // DOM is already loaded, initialize now
+                initErrorTracking();
+            }
+            
+            // Handle errors that might occur before DOM is loaded
+            window.onerror = function(message, source, line, column, error) {
+                console.error('Early error caught:', message, source, line, column);
+                // We'll let the full handler take over once initialized
+                return false;
+            };
+        })();
+    </script>
+    
+    <script>
+        // DOM elements
+        let statusDiv;
+        let phoneInput;
+        let callButton;
+        let endCallButton;
+        
+        // Twilio Device and active connection
+        let device;
+        let activeConnection = null;
+        let isConnecting = false;
+        let initInProgress = false;
+        let currentCallSid = null;
+        let callStatusStream = null;
+        
+        // Function called when the page loads
+        function initializePage() {
+            console.log('Page initialization started');
+            
+            // Initialize DOM references
+            statusDiv = document.getElementById('status');
+            phoneInput = document.getElementById('phone');
+            callButton = document.getElementById('callBtn');
+            endCallButton = document.getElementById('endCallBtn');
+            
+            if (!statusDiv || !phoneInput || !callButton || !endCallButton) {
+                console.error('Failed to find required DOM elements');
+                return;
+            }
+            
+            // Setup event listeners
+            callButton.addEventListener('click', makeCall);
+            endCallButton.addEventListener('click', endCall);
+            
+            // Initialize call status stream
+            initCallStatusStream();
+            
+            // Initialize the Twilio device
+            initTwilioDevice().catch(error => {
+                console.error('Initial device setup failed:', error);
+                if (statusDiv) {
+                    statusDiv.textContent = `Failed to initialize: ${error.message}`;
+                }
+            });
+        }
+        
+        // Initialize Server-Sent Events for call status updates
+        function initCallStatusStream() {
+            const clientId = `client_${Date.now()}`;
+            callStatusStream = new EventSource(`/call-status-stream?clientId=${clientId}`);
+            
+            callStatusStream.onopen = function() {
+                console.log('Call status stream connected');
+            };
+            
+            callStatusStream.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('Received call status update:', data);
+                    
+                    if (data.type === 'connected') {
+                        console.log('SSE connection established');
+                        return;
+                    }
+                    
+                    // Handle call status updates
+                    if (data.callSid && data.status) {
+                        handleCallStatusUpdate(data);
+                    }
+                } catch (error) {
+                    console.error('Error parsing call status update:', error);
+                }
+            };
+            
+            callStatusStream.onerror = function(error) {
+                console.error('Call status stream error:', error);
+                // Attempt to reconnect after 5 seconds
+                setTimeout(() => {
+                    if (callStatusStream.readyState === EventSource.CLOSED) {
+                        console.log('Attempting to reconnect call status stream...');
+                        initCallStatusStream();
+                    }
+                }, 5000);
+            };
+        }
+        
+        // Handle call status updates from server
+        function handleCallStatusUpdate(data) {
+            console.log(`Call ${data.callSid} status: ${data.status}`);
+            
+            // Only update UI if this is the current call
+            if (currentCallSid && data.callSid === currentCallSid) {
+                switch (data.status) {
+                    case 'initiated':
+                        statusDiv.textContent = 'Call initiated...';
+                        callButton.disabled = true;
+                        endCallButton.disabled = false;
+                        break;
+                    case 'ringing':
+                        statusDiv.textContent = `Ringing ${phoneInput.value}...`;
+                        callButton.disabled = true;
+                        endCallButton.disabled = false;
+                        break;
+                    case 'in-progress':
+                        statusDiv.textContent = 'Call connected! You are now live.';
+                        isConnecting = false;
+                        callButton.disabled = true;
+                        endCallButton.disabled = false;
+                        break;
+                    case 'completed':
+                        const duration = data.duration ? ` (${data.duration} seconds)` : '';
+                        statusDiv.textContent = `Call ended${duration}.`;
+                        resetCallState();
+                        break;
+                    case 'failed':
+                    case 'canceled':
+                    case 'busy':
+                    case 'no-answer':
+                        statusDiv.textContent = `Call ${data.status}.`;
+                        resetCallState();
+                        break;
+                }
+            }
+        }
+        
+        // Reset call state after call ends
+        function resetCallState() {
+            currentCallSid = null;
+            activeConnection = null;
+            isConnecting = false;
+            callButton.disabled = false;
+            endCallButton.disabled = true;
+        }
+        
+        // When the page loads
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializePage);
+        } else {
+            // DOM already loaded
+            initializePage();
+        }
+        
+        // Initialize Twilio Device
+        async function initTwilioDevice() {
+            // Prevent concurrent initializations
+            if (initInProgress) {
+                console.log('Device initialization already in progress, waiting...');
+                // Wait for current initialization to complete
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return initTwilioDevice();
+            }
+            
+            initInProgress = true;
+            statusDiv.textContent = 'Initializing Twilio Device...';
+            
+            try {
+                // Fetch token from server
+                console.log('Fetching token from server...');
+                const response = await fetch('/token');
+                const data = await response.json();
+                const { token, identity, config } = data;
+                
+                console.log('Received token from server:', token ? `${token.substring(0, 20)}...` : 'No token received');
+                
+                if (!token) {
+                    throw new Error('No token received from server');
+                }
+                
+                // Set the phone number input placeholder if provided
+                if (config && config.numberToCall) {
+                    phoneInput.value = config.numberToCall;
+                    console.log(`Pre-filled phone number: ${config.numberToCall}`);
+                }
+                
+                // Destroy any existing device
+                if (device) {
+                    try {
+                        console.log('Destroying existing device...');
+                        await device.destroy();
+                        console.log('Existing device destroyed');
+                    } catch (destroyError) {
+                        console.warn('Error destroying existing device:', destroyError);
+                        // Continue anyway
+                    }
+                }
+                
+                console.log('Creating new Twilio Device...');
+                
+                // For Twilio Client SDK v1.13, use setup method instead of constructor
+                const deviceOptions = {
+                    debug: true,
+                    warnings: true,
+                    enableIceRestart: true,
+                    codecPreferences: ['opus', 'pcmu'],
+                    maxReconnectAttempts: 5,
+                    reconnectBackoffMs: 2000,
+                    // Disable all sounds including ringtone
+                    sounds: {
+                        incoming: false,  // Disable incoming call ringtone
+                        outgoing: false,  // Disable outgoing call sounds
+                        disconnect: false // Disable disconnect sounds
+                    }
+                };
+                
+                // Use Twilio.Device.setup for v1.13 - this is synchronous
+                Twilio.Device.setup(token, deviceOptions);
+                console.log('Device setup completed, setting up event handlers...');
+                
+                // Get reference to the device (in v1.13, Twilio.Device is the global device)
+                device = Twilio.Device;
+                
+                // Clear any existing event handlers if possible
+                if (typeof device.removeAllListeners === 'function') {
+                    device.removeAllListeners();
+                }
+                
+                console.log('Adding comprehensive event listeners for debugging...');
+                
+                // Setup event handlers with detailed logging
+                device.on('ready', (device) => {
+                    console.log('📱 DEVICE EVENT: ready', device);
+                    onDeviceReady();
+                });
+                
+                device.on('error', (error) => {
+                    console.log('❌ DEVICE EVENT: error', error);
+                    onDeviceError(error);
+                });
+                
+                device.on('incoming', (connection) => {
+                    console.log('📞 DEVICE EVENT: incoming call received!', connection);
+                    console.log('📞 Connection details:', {
+                        parameters: connection.parameters,
+                        status: connection.status ? connection.status() : 'unknown',
+                        direction: connection.direction || 'unknown'
+                    });
+                    onIncomingCall(connection);
+                });
+                
+                device.on('offline', () => {
+                    console.log('📴 DEVICE EVENT: offline');
+                    handleDeviceOffline();
+                });
+                
+                device.on('cancel', () => {
+                    console.log('🚫 DEVICE EVENT: cancel');
+                    statusDiv.textContent = 'Call was cancelled.';
+                    resetCallState();
+                });
+                
+                // Add more detailed event listeners for debugging
+                device.on('connect', (connection) => {
+                    console.log('🔗 DEVICE EVENT: connect', connection);
+                    console.log('🔗 Connection connect details:', {
+                        parameters: connection.parameters,
+                        status: connection.status ? connection.status() : 'unknown',
+                        direction: connection.direction || 'unknown'
+                    });
+                    
+                    // Also catch connection-level errors
+                    connection.on('error', (error) => {
+                        console.error('💥 CONNECTION ERROR during connect:', error);
+                        window.handleError({
+                            type: 'twilio-connection-connect',
+                            message: error.message || 'Connection error during connect',
+                            code: error.code || 'unknown',
+                            source: 'Twilio Connection (connect)',
+                            stack: error.stack || null,
+                            twilioError: {
+                                code: error.code,
+                                message: error.message
+                            }
+                        });
+                    });
+                });
+                
+                device.on('disconnect', (connection) => {
+                    console.log('🔌 DEVICE EVENT: disconnect', connection);
+                });
+                
+                // Log all device activity
+                console.log('✅ All device event listeners added');
+                
+                // Return the initialized device
+                return device;
+            } catch (error) {
+                console.error('Error initializing Twilio Device:', error);
+                
+                // Report initialization error to server
+                window.handleError({
+                    type: 'twilio-initialization',
+                    message: error.message || 'Failed to initialize Twilio Device',
+                    source: 'Twilio Device Initialization',
+                    line: 0,
+                    column: 0,
+                    stack: error.stack || null,
+                    twilioError: error.code ? {
+                        code: error.code,
+                        message: error.message
+                    } : null
+                });
+                
+                statusDiv.textContent = `Error: ${error.message}`;
+                throw error; // Re-throw to allow caller to handle
+            } finally {
+                initInProgress = false;
+            }
+        }
+        
+        // Handle device offline event
+        function handleDeviceOffline() {
+            console.log('Device went offline');
+            statusDiv.textContent = 'Device is offline. Reconnecting...';
+            
+            // Prevent multiple reconnection attempts
+            if (initInProgress) {
+                console.log('Reconnection already in progress');
+                return;
+            }
+            
+            // Try to reconnect after a short delay
+            setTimeout(() => {
+                console.log('Attempting to reconnect device...');
+                
+                // We'll completely reinitialize the device
+                initTwilioDevice()
+                    .then(newDevice => {
+                        console.log('Device reconnected successfully');
+                        statusDiv.textContent = 'Device reconnected. Enter a phone number to call.';
+                        callButton.disabled = false;
+                        endCallButton.disabled = true;
+                    })
+                    .catch(error => {
+                        console.error('Failed to reconnect device:', error);
+                        statusDiv.textContent = 'Reconnection failed. Please refresh the page.';
+                        
+                        // Try again after a longer delay
+                        setTimeout(() => {
+                            if (!device || device.state !== 'ready') {
+                                handleDeviceOffline();
+                            }
+                        }, 10000);
+                    });
+            }, 3000);
+        }
+        
+        // Called when Twilio Device is ready
+        function onDeviceReady() {
+            console.log('Device is ready');
+            
+            // Request microphone access immediately when device is ready
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        console.log('Microphone access granted');
+                        // Don't keep the stream, just confirm access
+                        stream.getTracks().forEach(track => track.stop());
+                        statusDiv.textContent = 'Twilio Device ready. Microphone access granted. Enter a phone number to call.';
+                    })
+                    .catch(error => {
+                        console.warn('Microphone access denied:', error);
+                        statusDiv.textContent = 'Device ready, but microphone access denied. Calls may not work properly.';
+                    });
+            } else {
+                statusDiv.textContent = 'Twilio Device is ready. Enter a phone number to call.';
+            }
+            
+            callButton.disabled = false;
+            endCallButton.disabled = true;
+        }
+        
+        // Called when Twilio Device encounters an error
+        function onDeviceError(error) {
+            console.error('Twilio Device Error:', error);
+            let errorMessage = `Error: ${error.message}`;
+            
+            // Report Twilio Device error to server for troubleshooting
+            window.handleError({
+                type: 'twilio-device',
+                message: error.message || 'Unknown Twilio Device error',
+                code: error.code || 'unknown',
+                source: 'Twilio Device',
+                line: 0,
+                column: 0,
+                stack: error.stack || null,
+                twilioError: {
+                    code: error.code,
+                    message: error.message,
+                    description: error.description || null,
+                    explanation: error.explanation || null,
+                    causes: error.causes || null,
+                    solutions: error.solutions || null
+                }
+            });
+            
+            // Special handling for common errors
+            if (error.code === 31002) {
+                errorMessage += ' - Please check your Twilio account (Account Trial period might be expired).';
+            } else if (error.code === 31000) {
+                errorMessage += ' - Please check your Twilio settings.';
+            } else if (error.code === 31102) {
+                errorMessage += ' - Token validation failed. Try refreshing the page.';
+            } else if (error.code === 31009) {
+                errorMessage += ' - No transport available. Check network/WebRTC support.';
+            } else if (error.code === 31205) {
+                errorMessage += ' - WebRTC permission error. Please ensure microphone access is allowed.';
+            }
+            
+            statusDiv.textContent = errorMessage;
+            
+            // Re-enable call button if appropriate
+            if (!activeConnection && !isConnecting) {
+                callButton.disabled = false;
+            }
+        }
+        
+        // Add this new function right before onIncomingCall
+        function debugAudioSources() {
+            console.log('🔍 AUDIO SOURCE DEBUGGING STARTED');
+            
+            // Check all HTML5 audio elements
+            const audioElements = document.querySelectorAll('audio');
+            console.log(`🔍 Found ${audioElements.length} HTML5 audio elements:`, audioElements);
+            
+            audioElements.forEach((audio, index) => {
+                console.log(`🔍 Audio Element ${index}:`, {
+                    src: audio.src,
+                    currentTime: audio.currentTime,
+                    duration: audio.duration,
+                    paused: audio.paused,
+                    volume: audio.volume,
+                    muted: audio.muted,
+                    loop: audio.loop,
+                    playing: !audio.paused && audio.currentTime > 0
+                });
+                
+                if (!audio.paused) {
+                    console.log(`🔊 FOUND PLAYING AUDIO ELEMENT ${index}! Attempting to stop...`);
+                    audio.pause();
+                    audio.currentTime = 0;
+                    console.log(`⏹️ Stopped audio element ${index}`);
+                }
+            });
+            
+            // Check Web Audio API contexts
+            if (window.AudioContext || window.webkitAudioContext) {
+                console.log('🔍 Web Audio API available - checking for active contexts');
+                // Note: We can't easily enumerate all AudioContexts, but we can check if any exist
+            }
+            
+            // Check for active media streams
+            if (navigator.mediaDevices) {
+                navigator.mediaDevices.enumerateDevices()
+                    .then(devices => {
+                        console.log('🔍 Available media devices:', devices);
+                        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+                        const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+                        console.log(`🔍 Audio inputs: ${audioInputs.length}, Audio outputs: ${audioOutputs.length}`);
+                    })
+                    .catch(err => console.log('🔍 Could not enumerate devices:', err));
+            }
+            
+            // Check for any intervals or timeouts that might be playing sounds
+            console.log('🔍 Active intervals and timeouts (these might be playing sounds)');
+            
+            // Log the current page's audio context
+            if (window.audioContext) {
+                console.log('🔍 Page has audioContext:', window.audioContext.state);
+            }
+            
+            console.log('🔍 AUDIO SOURCE DEBUGGING COMPLETED');
+        }
+        
+        // Modified onIncomingCall function with enhanced audio debugging
+        function onIncomingCall(connection) {
+            console.log('📞 INCOMING CALL HANDLER STARTED');
+            console.log('📞 Incoming call detected:', connection);
+            
+            // IMMEDIATELY debug audio sources when call comes in
+            debugAudioSources();
+            
+            console.log('📞 Current UI state before accepting:', {
+                isConnecting: isConnecting,
+                activeConnection: !!activeConnection,
+                currentCallSid: currentCallSid,
+                callButtonDisabled: callButton.disabled,
+                endCallButtonDisabled: endCallButton.disabled
+            });
+            
+            statusDiv.textContent = 'Phone answered—connecting to browser...';
+            
+            // Send to server for logging
+            window.handleError({
+                type: 'incoming-call-debug',
+                message: 'Incoming call detected in browser',
+                source: 'Twilio Incoming Call Handler',
+                additionalInfo: {
+                    connectionExists: !!connection,
+                    connectionParameters: connection.parameters || {},
+                    currentCallSid: currentCallSid,
+                    deviceReady: device ? true : false
+                }
+            });
+            
+            // Set up connection event handlers BEFORE accepting
+            setupConnectionHandlers(connection);
+            
+            // Auto-accept the incoming call immediately
+            try {
+                console.log('📞 Attempting to accept incoming call...');
+                
+                // Debug audio sources RIGHT BEFORE accepting
+                console.log('🔍 Audio sources RIGHT BEFORE accepting call:');
+                debugAudioSources();
+                
+                connection.accept();
+                console.log('✅ Incoming call accepted successfully');
+                
+                // Debug audio sources RIGHT AFTER accepting
+                console.log('🔍 Audio sources RIGHT AFTER accepting call:');
+                setTimeout(() => {
+                    debugAudioSources();
+                }, 100);
+                
+                // Also debug after a delay to catch any delayed audio
+                setTimeout(() => {
+                    console.log('🔍 Audio sources 2 seconds after accepting call:');
+                    debugAudioSources();
+                }, 2000);
+                
+                // Update UI immediately (no ringtone to stop since it's disabled)
+                statusDiv.textContent = 'Connected! Audio is live - speak into your phone.';
+                
+                // Store the active connection
+                activeConnection = connection;
+                isConnecting = false;
+                callButton.disabled = true;
+                endCallButton.disabled = false;
+                
+                // Add a button to manually debug audio while call is active
+                if (!document.getElementById('debugAudioButton')) {
+                    const debugButton = document.createElement('button');
+                    debugButton.id = 'debugAudioButton';
+                    debugButton.textContent = '🔍 Debug Audio Sources';
+                    debugButton.style.cssText = 'margin: 10px; padding: 10px; background: orange; color: white; border: none; border-radius: 5px; cursor: pointer;';
+                    debugButton.onclick = debugAudioSources;
+                    document.querySelector('.controls').appendChild(debugButton);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error accepting incoming call:', error);
+                window.handleError({
+                    type: 'twilio-accept-error',
+                    message: error.message || 'Failed to accept incoming call',
+                    source: 'Twilio Incoming Call',
+                    stack: error.stack || null
+                });
+                statusDiv.textContent = 'Error connecting call.';
+                resetCallState();
+            }
+            
+            console.log('📞 INCOMING CALL HANDLER COMPLETED');
+        }
+        
+        // Enhanced setupConnectionHandlers with audio monitoring
+        function setupConnectionHandlers(connection) {
+            console.log('🔧 SETTING UP CONNECTION HANDLERS');
+            console.log('🔧 Setting up connection handlers for:', connection);
+            
+            // Send connection setup info to server
+            window.handleError({
+                type: 'connection-setup-debug',
+                message: 'Setting up connection handlers',
+                source: 'Twilio Connection Setup',
+                additionalInfo: {
+                    connectionExists: !!connection,
+                    connectionStatus: connection.status ? connection.status() : 'unknown',
+                    connectionParameters: connection.parameters || {}
+                }
+            });
+            
+            // Clear any existing listeners if this connection already had them
+            connection.removeAllListeners('accept');
+            connection.removeAllListeners('disconnect');
+            connection.removeAllListeners('error');
+            connection.removeAllListeners('reject');
+            connection.removeAllListeners('mute');
+            connection.removeAllListeners('unmute');
+            
+            // Add new listeners with enhanced logging
+            connection.on('accept', () => {
+                console.log('🎯 CONNECTION EVENT: accept - connection established');
+                statusDiv.textContent = 'Call connected! Speak into your phone - audio is live.';
+                isConnecting = false;
+                callButton.disabled = true;
+                endCallButton.disabled = false;
+            });
+            
+            connection.on('disconnect', () => {
+                console.log('🔌 CONNECTION EVENT: disconnect');
+                onConnectionDisconnected();
+            });
+            
+            connection.on('error', (error) => {
+                console.log('❌ CONNECTION EVENT: error', error);
+                onConnectionError(error);
+            });
+            
+            connection.on('reject', () => {
+                console.log('🚫 CONNECTION EVENT: reject');
+                statusDiv.textContent = 'Call was rejected.';
+                resetCallState();
+            });
+            
+            // Add mute/unmute handlers
+            connection.on('mute', (muted, connection) => {
+                console.log('🔇 CONNECTION EVENT: mute status changed:', muted);
+                // Send to server
+                window.handleError({
+                    type: 'connection-mute-debug',
+                    message: `Connection mute status: ${muted}`,
+                    source: 'Twilio Connection Mute'
+                });
+            });
+            
+            // Add a listener for when call status changes with enhanced audio debugging
+            connection.on('status', function(status) {
+                console.log('📊 CONNECTION EVENT: status changed to:', status);
+                
+                // Debug audio sources on every status change
+                console.log(`�� Audio sources when status changed to ${status}:`);
+                debugAudioSources();
+                
+                if (status === 'open') {
+                    console.log('🎵 Connection is now open - audio should be flowing!');
+                    console.log('🎵 Bidirectional audio is ready');
+                    statusDiv.textContent = 'Connected! Audio is live - speak into your phone.';
+                    
+                    // Special debugging when audio becomes active
+                    setTimeout(() => {
+                        console.log('🔍 Audio sources 1 second after connection opened:');
+                        debugAudioSources();
+                        
+                        // Check if the ringtone sound is coming from the phone itself
+                        statusDiv.innerHTML = `
+                            Connected! Audio is live - speak into your phone.<br>
+                            <strong style="color: red;">🔍 DEBUGGING: If you hear a ringtone, it might be:</strong><br>
+                            <span style="color: orange;">1. Your phone still ringing (hang up and answer again)</span><br>
+                            <span style="color: orange;">2. Audio feedback (move phone away from computer)</span><br>
+                            <span style="color: orange;">3. Call waiting tone from your carrier</span>
+                        `;
+                    }, 1000);
+                } else if (status === 'closed' || status === 'completed') {
+                    console.log('📊 Connection closed, calling onConnectionDisconnected');
+                    onConnectionDisconnected();
+                } else if (status === 'pending') {
+                    console.log('⏳ Connection is pending - waiting for open state');
+                    statusDiv.textContent = 'Connecting audio...';
+                } else if (status === 'connecting') {
+                    console.log('🔄 Connection is connecting');
+                    statusDiv.textContent = 'Establishing audio connection...';
+                } else {
+                    console.log('📊 Connection status:', status);
+                }
+            });
+            
+            // Add volume indicators if available
+            if (typeof connection.volume === 'function') {
+                console.log('🎤 Setting up volume monitoring...');
+                connection.volume((inputVolume, outputVolume) => {
+                    // Log audio levels periodically
+                    console.log('🎤 Audio levels - Input:', inputVolume, 'Output:', outputVolume);
+                });
+            } else {
+                console.log('⚠️ Volume monitoring not available on this connection');
+            }
+            
+            console.log('✅ CONNECTION HANDLERS SETUP COMPLETE');
+        }
+        
+        // Called when a connection is disconnected
+        function onConnectionDisconnected() {
+            console.log('Call disconnected');
+            console.log('Final connection state:', activeConnection ? activeConnection.status() : 'No active connection');
+            
+            statusDiv.textContent = 'Call ended.';
+            resetCallState();
+        }
+        
+        // Called when a connection encounters an error
+        function onConnectionError(error) {
+            console.error('Connection Error:', error);
+            
+            // Report Twilio Connection error to server for troubleshooting
+            window.handleError({
+                type: 'twilio-connection',
+                message: error.message || 'Unknown Twilio Connection error',
+                code: error.code || 'unknown',
+                source: 'Twilio Connection',
+                line: 0,
+                column: 0,  
+                stack: error.stack || null,
+                twilioError: {
+                    code: error.code,
+                    message: error.message,
+                    description: error.description || null,
+                    explanation: error.explanation || null,
+                    causes: error.causes || null,
+                    solutions: error.solutions || null
+                }
+            });
+            
+            statusDiv.textContent = `Call Error: ${error.message}`;
+            activeConnection = null;
+            isConnecting = false;
+            callButton.disabled = false;
+            endCallButton.disabled = true;
+        }
+        
+        // Make a call to the DMV
+        async function makeCall() {
+            const phoneNumber = phoneInput.value.trim();
+            
+            if (!phoneNumber) {
+                statusDiv.textContent = 'Please enter a valid phone number.';
+                return;
+            }
+            
+            try {
+                // Disable call button and update status
+                callButton.disabled = true;
+                statusDiv.textContent = 'Placing call...';
+                isConnecting = true;
+                
+                // Send request to server to initiate call
+                const response = await fetch('/call', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ phoneNumber })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Store the call SID for tracking
+                    currentCallSid = data.callSid;
+                    statusDiv.textContent = `Call initiated...`;
+                    console.log('Call initiated with SID:', data.callSid);
+                    
+                    // Enable End Call button
+                    endCallButton.disabled = false;
+                    
+                    // Note: Status updates will now come via SSE, no need for timeout
+                } else {
+                    throw new Error(data.error || 'Failed to place call');
+                }
+            } catch (error) {
+                console.error('Error making call:', error);
+                statusDiv.textContent = `Error: ${error.message}`;
+                resetCallState();
+            }
+        }
+
+        // Function to end the call
+        function endCall() {
+            console.log('Ending call...');
+            
+            // Disable call button and update status
+            callButton.disabled = true;
+            statusDiv.textContent = 'Ending call...';
+            isConnecting = true;
+            
+            // Send request to server to end the call
+            fetch('/end-call', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ callSid: currentCallSid })
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log('Call ended successfully');
+                    resetCallState();
+                } else {
+                    throw new Error('Failed to end call');
+                }
+            })
+            .catch(error => {
+                console.error('Error ending call:', error);
+                statusDiv.textContent = `Error: ${error.message}`;
+                resetCallState();
+            });
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>☎️🤖 Dialbot</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;max-width:540px;margin:2rem auto;padding:0 1rem}
+    input,button{width:100%;padding:.7rem;margin:.4rem 0;border:1px solid #ccc;border-radius:4px;font-size:1rem}
+    button{background:#0c8;color:#fff;cursor:pointer}
+    button[disabled]{background:#aaa;cursor:not-allowed}
+    #status{margin:1rem 0;padding:.8rem;background:#f0f0f0;border-radius:4px}
+  </style>
+</head>
+<body>
+  <h2>Call Dialer</h2>
+
+  <div id="status">Loading Twilio Device…</div>
+
+  <input id="phone" type="tel" placeholder="+1##########" />
+  <button id="callBtn"   disabled>Call</button>
+  <button id="endBtn"    disabled style="background:#d9534f">End Call</button>
+
+  <!-- Twilio Client SDK v1.13 -->
+  <script src="https://sdk.twilio.com/js/client/v1.13/twilio.min.js"></script>
+  <script>
+  (async () => {
+    /* DOM refs */
+    const S = document.getElementById('status');
+    const inp = document.getElementById('phone');
+    const callBtn = document.getElementById('callBtn');
+    const endBtn  = document.getElementById('endBtn');
+
+    let activeConn = null;
+    let currentSid = null;
+
+    /* 1️⃣  Get a capability token from your server */
+    const { token } = await fetch('/token').then(r => r.json());
+
+    /* 2️⃣  Setup Twilio.Device with *all* sounds disabled  */
+    Twilio.Device.setup(token, { debug:true, sounds:false });
+
+    /* 3️⃣  Extra safety – explicitly silence each category */
+    Twilio.Device.audio.incoming(false);
+    Twilio.Device.audio.outgoing(false);
+    Twilio.Device.audio.disconnect(false);
+
+    /* 4️⃣  UI / event wiring */
+    Twilio.Device.on('ready', () => {
+      S.textContent = 'Ready – enter a number and press Call';
+      callBtn.disabled = false;
+    });
+
+    Twilio.Device.on('error',  e => S.textContent = `Device error: ${e.message}`);
+
+    /* Incoming leg from Twilio once the phone answers */
+    Twilio.Device.on('incoming',  c => {
+      c.accept();
+      activeConn = c;
+      S.textContent = 'Connected – speak!';
+      endBtn.disabled = false;
+    });
+
+    /* 5️⃣  Start an outbound PSTN call via your server */
+    callBtn.onclick = async () => {
+      const num = inp.value.trim();
+      if (!num) { S.textContent = 'Enter a valid number'; return; }
+
+      callBtn.disabled = true;
+      S.textContent = 'Dialing…';
+
+      const res = await fetch('/call', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ phoneNumber:num })
+      }).then(r => r.json());
+
+      currentSid = res.callSid;
+      endBtn.disabled = false;
+    };
+
+    /* 6️⃣  End the whole call */
+    endBtn.onclick = async () => {
+      if (currentSid) await fetch('/end-call', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ callSid:currentSid })
+      });
+      if (activeConn) activeConn.disconnect();
+
+      S.textContent = 'Ready';
+      callBtn.disabled = false;
+      endBtn.disabled = true;
+      activeConn = null;
+      currentSid  = null;
+    };
+  })();
+  </script>
+</body>
+</html>
