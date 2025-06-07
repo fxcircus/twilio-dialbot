@@ -10,7 +10,7 @@ Browser-to-phone bridge built with Twilio Client SDK v1.13 and Node.js.
 - ✅ 12-button keypad (0-9, *, #) for phone-tree navigation
 - ✅ **Hang-up & Redial** - Automatically redials after configurable delay
 
-![Appscreenshot](./screenshot.png)
+![Appscreenshot](./public/screenshot.png)
 
 ## Environment Variables
 

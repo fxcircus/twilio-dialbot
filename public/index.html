@@ -5,16 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>☎️🤖 Dialbot</title>
 <style>
-body{font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:2rem auto}
+body{font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:2rem auto}
 input,button{width:100%;padding:.7rem;margin:.4rem 0;font-size:1rem;border:1px solid #ccc;border-radius:4px}
 button{background:#0c8;color:#fff;cursor:pointer}
 button[disabled]{background:#aaa;cursor:not-allowed}
-#retryBtn{background:#f0ad4e}
-#endBtn{background:#d9534f}
+#retryBtn{background:#f0ad4e} #endBtn{background:#d9534f}
 #status{padding:.8rem;background:#f4f4f4;border-radius:4px;margin-top:1rem}
 #pad{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-top:1rem}
-#pad button{background:#333}
-#pad button[disabled]{background:#666}
+#pad button{background:#333} #pad button[disabled]{background:#666}
+#logBox{margin-top:1rem;border:1px solid #ccc;border-radius:4px;height:220px;overflow-y:auto;background:#111;color:#d7d7d7;font:0.82rem/1.35 monospace;padding:.5rem;white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -27,107 +26,103 @@ button[disabled]{background:#aaa;cursor:not-allowed}
 
 <div id="pad"></div>
 <div id="status">Loading Twilio Device…</div>
+<div id="logBox"></div>  <!-- 📜 live log -->
 
 <script src="https://sdk.twilio.com/js/client/v1.13/twilio.min.js"></script>
 <script>
 (async () => {
-  /* ----- DOM helpers ----- */
-  const $ = id => document.getElementById(id);
-  const status  = $('status'), padDiv=$('pad');
-  const callBtn = $('callBtn'), endBtn=$('endBtn'), retryBtn=$('retryBtn');
-  const phoneInp= $('phone');
+  /* ── DOM helpers ──────────────────────────────────── */
+  const $   = id=>document.getElementById(id);
+  const log = msg => { const ts=new Date().toLocaleTimeString();
+                       logBox.textContent += `[${ts}] ${msg}\n`;
+                       logBox.scrollTop   = logBox.scrollHeight; };
 
-  /* ----- State ----- */
+  const status=$('status'), padDiv=$('pad'), logBox=$('logBox');
+  const callBtn=$('callBtn'), endBtn=$('endBtn'), retryBtn=$('retryBtn');
+  const phoneInp=$('phone');
+
+  /* ── State ─────────────────────────────────────────── */
   let activeConn=null, currentSid=null, lastNumber=null;
-  let redialDelay=60000, redialTimer=null;
+  let redialDelay=60000, redialTimer=null, redialCount=0;
 
-  /* 1️⃣  Fetch config + token */
-  redialDelay = (await fetch('/config').then(r=>r.json())).redialDelayMs || 60000;
+  /* 1️⃣  Fetch config (+ token) */
+  redialDelay = (await fetch('/config').then(r=>r.json())).redialDelayMs||60000;
   const { token } = await fetch('/token').then(r=>r.json());
 
-  /* 2️⃣  Twilio Device – sounds off */
-  Twilio.Device.setup(token,{debug:true,sounds:false});
-  Twilio.Device.audio.incoming(false);
-  Twilio.Device.audio.outgoing(false);
+  /* 2️⃣  Twilio Device setup */
+  Twilio.Device.setup(token,{debug:false,sounds:false});
+  Twilio.Device.audio.incoming(false); Twilio.Device.audio.outgoing(false);
   Twilio.Device.audio.disconnect(false);
 
-  Twilio.Device.on('ready', ()=>{ status.textContent='Ready'; callBtn.disabled=false; });
-  Twilio.Device.on('error', e => status.textContent='Device error: '+e.message);
+  Twilio.Device.on('ready', ()=>{ status.textContent='Ready'; callBtn.disabled=false; log('Device ready');});
+  Twilio.Device.on('error', e   =>{ status.textContent='Device error'; log(`Device error: ${e.message}`);});
 
-  /* 3️⃣  Incoming leg when callee answers */
+  /* Incoming leg once callee answers */
   Twilio.Device.on('incoming', conn=>{
     conn.accept();
     activeConn=conn; endBtn.disabled=false; retryBtn.disabled=false; enablePad(true);
     status.textContent='Connected – speak!';
-    conn.on('disconnect', resetUI);
+    log('Call connected');
+    conn.on('disconnect', ()=>{ log('Call disconnected'); resetUI(); });
   });
 
-  /* ----- Build DTMF keypad ----- */
-  "123456789*0#".split('').forEach(k=>{
+  /* ── Build keypad ─────────────────────────────────── */
+  "123456789*0#".split('').forEach(d=>{
     const b=document.createElement('button');
-    b.textContent=k; b.disabled=true;
-    b.onclick=()=> activeConn && activeConn.sendDigits(k);
+    b.textContent=d; b.disabled=true;
+    b.onclick=()=>{ activeConn?.sendDigits(d); log(`DTMF sent: ${d}`); };
     padDiv.appendChild(b);
   });
-  const enablePad = on => padDiv.querySelectorAll('button')
+  const enablePad = on=> padDiv.querySelectorAll('button')
                                .forEach(btn=>btn.disabled=!on);
 
-  /* ----- Call helpers ----- */
+  /* ── Call helpers ─────────────────────────────────── */
   async function startCall(num){
-    lastNumber = num;
-    callBtn.disabled = true;
-    status.textContent = 'Dialing…';
-    const res = await fetch('/call',{
+    lastNumber=num; callBtn.disabled=true;
+    status.textContent='Dialing…'; log(`Dial attempt → ${num}`);
+    const res=await fetch('/call',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({phoneNumber:num})
     }).then(r=>r.json());
-    currentSid = res.callSid;
-    endBtn.disabled=false;
-    retryBtn.disabled=false;
+    currentSid=res.callSid;
+    endBtn.disabled=false; retryBtn.disabled=false;
   }
 
   async function endCurrentCall(){
-    if(currentSid){
-      await fetch('/end-call',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({callSid:currentSid})
-      });
-    }
+    if(currentSid) await fetch('/end-call',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({callSid:currentSid})
+    });
     if(activeConn) activeConn.disconnect();
   }
 
   function scheduleRedial(){
+    redialTimer=setTimeout(()=>{ redialTimer=null; redialCount++;
+                                 log(`⇪ Redial #${redialCount}`); startCall(lastNumber); },
+                                 redialDelay);
     status.textContent=`Redialing in ${redialDelay/1000}s…`;
+    log(`Scheduled redial in ${redialDelay/1000}s`);
     callBtn.disabled=true; retryBtn.disabled=true; endBtn.disabled=true; enablePad(false);
-    redialTimer = setTimeout(()=>{ redialTimer=null; startCall(lastNumber); }, redialDelay);
   }
 
-  function clearRedialTimer(){
-    if(redialTimer){ clearTimeout(redialTimer); redialTimer=null; }
-  }
+  function clearRedial(){ if(redialTimer){ clearTimeout(redialTimer); redialTimer=null; } }
 
   function resetUI(){
-    clearRedialTimer();
-    activeConn=currentSid=null;
-    enablePad(false);
+    clearRedial(); activeConn=currentSid=null; enablePad(false);
     callBtn.disabled=false; endBtn.disabled=true; retryBtn.disabled=true;
     status.textContent='Ready';
   }
 
-  /* ----- Button handlers ----- */
-  callBtn.onclick = () => {
-    const num = phoneInp.value.trim();
-    if(!num){ status.textContent='Enter a valid number'; return; }
-    startCall(num);
+  /* ── Button handlers ──────────────────────────────── */
+  callBtn.onclick = ()=>{
+    const n=phoneInp.value.trim();
+    if(!n){ status.textContent='Enter a valid number'; return; }
+    startCall(n);
   };
 
-  endBtn.onclick = async () => {
-    await endCurrentCall();
-    resetUI();
-  };
-
-  retryBtn.onclick = async () => {
-    if(!activeConn && !currentSid) return;  // safety
+  endBtn.onclick   = async()=>{ await endCurrentCall(); resetUI(); };
+  retryBtn.onclick = async()=>{
+    if(!activeConn && !currentSid) return;
     await endCurrentCall();
     scheduleRedial();
   };
