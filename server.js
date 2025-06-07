@@ -1,13 +1,15 @@
-// server.js ───────────────────────────────────────────
+// server.js — Dialbot: calling, redial loop, mono recording with auto-prune
 const express = require('express');
 const bodyParser = require('body-parser');
-const twilio  = require('twilio');
+const twilio = require('twilio');
 require('dotenv').config();
 
 const app = express();
-app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(bodyParser.json());                        // for our own API
+app.use(express.urlencoded({ extended: false }));  // for Twilio webhooks
+app.use(express.static('public'));                 // serve /public/index.html
 
+// ── .env values ──────────────────────────────────────────────────
 const {
   TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN,
@@ -15,14 +17,14 @@ const {
   TWILIO_API_KEY_SECRET,
   TWILIO_NUMBER,
   SERVER_URL,
-  REDIAL_DELAY_MS = 60000          // fallback 60 s
+  REDIAL_DELAY_MS = 60000
 } = process.env;
 
-const twilioRest   = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-const AccessToken  = twilio.jwt.AccessToken;
-const VoiceGrant   = AccessToken.VoiceGrant;
+const twilioRest  = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+const AccessToken = twilio.jwt.AccessToken;
+const VoiceGrant  = AccessToken.VoiceGrant;
 
-// ── 1. Capability token ──────────────────────────────
+/* ══ 1. Capability token ════════════════════════════════════════ */
 app.get('/token', (_req, res) => {
   const token = new AccessToken(
     TWILIO_ACCOUNT_SID,
@@ -34,45 +36,75 @@ app.get('/token', (_req, res) => {
   res.json({ token: token.toJwt() });
 });
 
-// ── 2. Config endpoint (sends redial delay) ──────────
+/* ══ 2. Front-end config (redial delay) ═════════════════════════ */
 app.get('/config', (_req, res) =>
   res.json({ redialDelayMs: Number(REDIAL_DELAY_MS) })
 );
 
-// ── 3. Start outbound call ───────────────────────────
+/* ══ 3. Start outbound call ═════════════════════════════════════ */
 app.post('/call', async (req, res) => {
   const { phoneNumber } = req.body;
   try {
+    console.log('📞 Call request received:', req.body);
+
     const call = await twilioRest.calls.create({
-      to:   phoneNumber,
+      to: phoneNumber,
       from: TWILIO_NUMBER,
-      url:  `${SERVER_URL}/twiml?client=browserUser`
+      url: `${SERVER_URL}/twiml?client=browserUser`,
+      record: true,
+      machineDetection: 'Enable',
+      statusCallback: `${SERVER_URL}/call-status`,
+      statusCallbackEvent: ['completed']
     });
+
+    console.log('✅ Call created successfully:', call.sid);
     res.json({ callSid: call.sid });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    console.error('Call creation failed:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// ── 4. End call manually ─────────────────────────────
+/* ══ 4. Hang up on demand ═══════════════════════════════════════ */
 app.post('/end-call', async (req, res) => {
-  const { callSid } = req.body;
   try {
-    await twilioRest.calls(callSid).update({ status: 'completed' });
+    await twilioRest.calls(req.body.callSid).update({ status: 'completed' });
     res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-// ── 5. TwiML bridge ──────────────────────────────────
+/* ══ 5. TwiML: bridge PSTN → browser ════════════════════════════ */
 app.post('/twiml', (req, res) => {
-  const client = req.query.client || 'browserUser';
   const vr = new twilio.twiml.VoiceResponse();
-  vr.dial().client(client);
+  vr.dial({ record: true })
+    .client(req.query.client || 'browserUser');
   res.type('text/xml').send(vr.toString());
 });
 
-// ── Start server ─────────────────────────────────────
+/* ══ 6. Call-status webhook: prune useless recordings ═══════════ */
+app.post('/call-status', async (req, res) => {
+  const {
+    AnsweredBy, CallDuration = 0,
+    RecordingSid
+  } = req.body;
+
+  const human   = AnsweredBy === 'human';
+  const longish = Number(CallDuration) >= 30;
+  const keep    = human && longish;
+
+  try {
+    if (!keep && RecordingSid) {
+      // .remove() deletes the recording immediately
+      await twilioRest.recordings(RecordingSid).remove();
+    }
+  } catch (err) {
+    console.error('call-status handler error:', err.message);
+  }
+  res.sendStatus(200);
+});
+
+/* ══ 7. Start server ════════════════════════════════════════════ */
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`Dialbot server running on port ${PORT}`));
