@@ -1,100 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>☎️🤖 Dialbot</title>
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;max-width:540px;margin:2rem auto;padding:0 1rem}
-    input,button{width:100%;padding:.7rem;margin:.4rem 0;border:1px solid #ccc;border-radius:4px;font-size:1rem}
-    button{background:#0c8;color:#fff;cursor:pointer}
-    button[disabled]{background:#aaa;cursor:not-allowed}
-    #status{margin:1rem 0;padding:.8rem;background:#f0f0f0;border-radius:4px}
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Twilio Dial Bridge (Silent + Keypad)</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:2rem auto}
+input,button{width:100%;padding:.7rem;margin:.4rem 0;font-size:1rem;border:1px solid #ccc;border-radius:4px}
+button{background:#0c8;color:#fff;cursor:pointer}
+button[disabled]{background:#aaa;cursor:not-allowed}
+#status{padding:.8rem;background:#f4f4f4;border-radius:4px;margin-top:1rem}
+#pad{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-top:1rem}
+#pad button{background:#333}
+#pad button[disabled]{background:#666}
+</style>
 </head>
 <body>
-  <h2>Call Dialer</h2>
+<h2>Browser ⇄ Phone Bridge (No Ringtone)</h2>
 
-  <div id="status">Loading Twilio Device…</div>
+<input id="phone" type="tel" placeholder="+1##########"/>
+<button id="callBtn"   disabled>Call</button>
+<button id="endBtn"    disabled style="background:#d9534f">End Call</button>
 
-  <input id="phone" type="tel" placeholder="+1##########" />
-  <button id="callBtn"   disabled>Call</button>
-  <button id="endBtn"    disabled style="background:#d9534f">End Call</button>
+<div id="pad"></div>
+<div id="status">Loading Twilio Device…</div>
 
-  <!-- Twilio Client SDK v1.13 -->
-  <script src="https://sdk.twilio.com/js/client/v1.13/twilio.min.js"></script>
-  <script>
-  (async () => {
-    /* DOM refs */
-    const S = document.getElementById('status');
-    const inp = document.getElementById('phone');
-    const callBtn = document.getElementById('callBtn');
-    const endBtn  = document.getElementById('endBtn');
+<script src="https://sdk.twilio.com/js/client/v1.13/twilio.min.js"></script>
+<script>
+(async () => {
+  const S = id => document.getElementById(id);
+  const status = S('status'), padDiv = S('pad');
+  const callBtn=S('callBtn'), endBtn=S('endBtn'), phoneInp=S('phone');
+  let activeConn=null, currentSid=null;
 
-    let activeConn = null;
-    let currentSid = null;
+  // Build keypad UI (0-9 * #)
+  const keys="123456789*0#".split('');
+  keys.forEach(k=>{
+    const b=document.createElement('button');
+    b.textContent=k; b.disabled=true;
+    b.onclick=()=> activeConn && activeConn.sendDigits(k);
+    padDiv.appendChild(b);
+  });
+  const setPadEnabled = en =>
+    [...padDiv.querySelectorAll('button')].forEach(b=>b.disabled=!en);
 
-    /* 1️⃣  Get a capability token from your server */
-    const { token } = await fetch('/token').then(r => r.json());
+  // 1. fetch token
+  const { token } = await fetch('/token').then(r=>r.json());
 
-    /* 2️⃣  Setup Twilio.Device with *all* sounds disabled  */
-    Twilio.Device.setup(token, { debug:true, sounds:false });
+  // 2. Twilio Device setup with all sounds off
+  Twilio.Device.setup(token,{debug:true,sounds:false});
+  Twilio.Device.audio.incoming(false);
+  Twilio.Device.audio.outgoing(false);
+  Twilio.Device.audio.disconnect(false);
 
-    /* 3️⃣  Extra safety – explicitly silence each category */
-    Twilio.Device.audio.incoming(false);
-    Twilio.Device.audio.outgoing(false);
-    Twilio.Device.audio.disconnect(false);
+  Twilio.Device.on('ready', ()=>{
+    status.textContent='Ready – enter a number, press Call';
+    callBtn.disabled=false;
+  });
+  Twilio.Device.on('error', e=> status.textContent='Device error: '+e.message);
 
-    /* 4️⃣  UI / event wiring */
-    Twilio.Device.on('ready', () => {
-      S.textContent = 'Ready – enter a number and press Call';
-      callBtn.disabled = false;
+  // PSTN answers → Twilio calls our browser (‘incoming’)
+  Twilio.Device.on('incoming', c=>{
+    c.accept();
+    activeConn=c; endBtn.disabled=false; setPadEnabled(true);
+    status.textContent='Connected – speak!';
+    c.on('disconnect', resetUI);
+  });
+
+  // Call PSTN via backend
+  callBtn.onclick=async()=>{
+    const num=phoneInp.value.trim();
+    if(!num){status.textContent='Enter a valid number';return;}
+    callBtn.disabled=true; status.textContent='Dialing…';
+
+    const res=await fetch('/call',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phoneNumber:num})
+    }).then(r=>r.json());
+
+    currentSid=res.callSid;
+    endBtn.disabled=false;
+  };
+
+  // End call
+  endBtn.onclick = async ()=>{
+    if(currentSid) await fetch('/end-call',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({callSid:currentSid})
     });
+    if(activeConn) activeConn.disconnect();
+    resetUI();
+  };
 
-    Twilio.Device.on('error',  e => S.textContent = `Device error: ${e.message}`);
-
-    /* Incoming leg from Twilio once the phone answers */
-    Twilio.Device.on('incoming',  c => {
-      c.accept();
-      activeConn = c;
-      S.textContent = 'Connected – speak!';
-      endBtn.disabled = false;
-    });
-
-    /* 5️⃣  Start an outbound PSTN call via your server */
-    callBtn.onclick = async () => {
-      const num = inp.value.trim();
-      if (!num) { S.textContent = 'Enter a valid number'; return; }
-
-      callBtn.disabled = true;
-      S.textContent = 'Dialing…';
-
-      const res = await fetch('/call', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ phoneNumber:num })
-      }).then(r => r.json());
-
-      currentSid = res.callSid;
-      endBtn.disabled = false;
-    };
-
-    /* 6️⃣  End the whole call */
-    endBtn.onclick = async () => {
-      if (currentSid) await fetch('/end-call', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ callSid:currentSid })
-      });
-      if (activeConn) activeConn.disconnect();
-
-      S.textContent = 'Ready';
-      callBtn.disabled = false;
-      endBtn.disabled = true;
-      activeConn = null;
-      currentSid  = null;
-    };
-  })();
-  </script>
+  function resetUI(){
+    activeConn=null; currentSid=null; setPadEnabled(false);
+    callBtn.disabled=false; endBtn.disabled=true;
+    status.textContent='Ready';
+  }
+})();
+</script>
 </body>
 </html>
