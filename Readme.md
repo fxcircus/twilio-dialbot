@@ -103,6 +103,8 @@ open https://<ngrok-id>.ngrok-free.app
 | Storage    | First 10 000 min free, then \$0.0005 / min·month |
 | Auto‑prune | Voicemail or <30 s calls deleted by webhook      |
 
+Access recordings from  https://console.twilio.com/us1/monitor/logs/call-recordings?frameUrl=/console/voice/recordings/recording-logs?x-target-region=us1
+
 > **Tip:** If you need to keep everything, remove the deletion logic in `server.js`.
 
 ---

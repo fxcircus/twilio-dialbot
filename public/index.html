@@ -3,30 +3,27 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>☎️🤖 Dialbot</title>
-<style>
-body{font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:2rem auto}
-input,button{width:100%;padding:.7rem;margin:.4rem 0;font-size:1rem;border:1px solid #ccc;border-radius:4px}
-button{background:#0c8;color:#fff;cursor:pointer}
-button[disabled]{background:#aaa;cursor:not-allowed}
-#retryBtn{background:#f0ad4e} #endBtn{background:#d9534f}
-#status{padding:.8rem;background:#f4f4f4;border-radius:4px;margin-top:1rem}
-#pad{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-top:1rem}
-#pad button{background:#333} #pad button[disabled]{background:#666}
-#logBox{margin-top:1rem;border:1px solid #ccc;border-radius:4px;height:240px;overflow-y:auto;background:#111;color:#d7d7d7;font:0.82rem/1.35 monospace;padding:.5rem;white-space:pre-wrap}
-</style>
+<title>☎️ DialBot 🤖</title>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<h2>Call Dialer</h2>
+<div class="container">
+  <h2>☎️ DialBot 🤖</h2>
 
-<input id="phone" type="tel" placeholder="+1##########"/>
-<button id="callBtn"  disabled>Call</button>
-<button id="endBtn"   disabled>End Call</button>
-<button id="retryBtn" disabled>Hang-up & Redial</button>
+  <div class="input-group">
+    <input id="phone" type="tel" placeholder="+1xxxxxxxxxx"/>
+  </div>
+  
+  <div class="button-group">
+    <button id="callBtn" disabled>📞 Start Call</button>
+    <button id="endBtn" disabled>📴 End Call</button>
+    <button id="retryBtn" disabled>🔄 Hang-up & Redial</button>
+  </div>
 
-<div id="pad"></div>
-<div id="status">Loading Twilio Device…</div>
-<div id="logBox"></div>
+  <div id="pad"></div>
+  <div id="status" class="loading">🔄 Loading Twilio Device…</div>
+  <div id="logBox"></div>
+</div>
 
 <script src="https://sdk.twilio.com/js/client/v1.13/twilio.min.js"></script>
 <script>
@@ -45,9 +42,16 @@ button[disabled]{background:#aaa;cursor:not-allowed}
   let activeConn=null, currentSid=null, lastNumber=null;
   let redialDelay=60000, redialTimer=null, redialCount=0;
 
-  /* 1️⃣  Config + token */
+  /* 1️⃣  Config + token + default number */
   redialDelay = (await fetch('/config').then(r=>r.json())).redialDelayMs || 60000;
   const { token } = await fetch('/token').then(r=>r.json());
+  
+  // Check for default number from environment
+  const { number: defaultNumber } = await fetch('/default-number').then(r=>r.json());
+  if (defaultNumber) {
+    phoneInp.value = defaultNumber;
+    phoneInp.placeholder = defaultNumber;
+  }
 
   /* 2️⃣  Twilio Device */
   Twilio.Device.setup(token,{debug:false,sounds:false});
@@ -56,15 +60,20 @@ button[disabled]{background:#aaa;cursor:not-allowed}
   Twilio.Device.audio.disconnect(false);
 
   Twilio.Device.on('ready', ()=>{
-    status.textContent='Ready'; callBtn.disabled=false; log('Device ready');
+    status.textContent='✅ Ready to dial'; 
+    status.classList.remove('loading');
+    callBtn.disabled=false; 
+    log('Device ready');
   });
   Twilio.Device.on('error', e=>{
-    status.textContent='Device error'; log(`Device error: ${e.message}`);
+    status.textContent='❌ Device error'; 
+    status.classList.remove('loading');
+    log(`Device error: ${e.message}`);
   });
   Twilio.Device.on('incoming', conn=>{
     conn.accept();
     activeConn=conn; endBtn.disabled=false; retryBtn.disabled=false; enablePad(true);
-    status.textContent='Connected – speak!';
+    status.textContent='🔊 Connected – speak now!';
     log('Call connected');
     conn.on('disconnect', ()=>{ log('Call disconnected'); resetUI(); });
   });
@@ -82,7 +91,7 @@ button[disabled]{background:#aaa;cursor:not-allowed}
   /* 4️⃣  Call helpers */
   async function startCall(num){
     lastNumber=num; callBtn.disabled=true;
-    status.textContent='Dialing…'; log(`Dial → ${num}`);
+    status.textContent='📞 Dialing…'; log(`Dial → ${num}`);
     const { callSid } = await fetch('/call',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({phoneNumber:num})
@@ -106,7 +115,7 @@ button[disabled]{background:#aaa;cursor:not-allowed}
       redialTimer=null; redialCount++; log(`⇪ Redial #${redialCount}`);
       startCall(lastNumber);
     }, redialDelay);
-    status.textContent=`Redialing in ${redialDelay/1000}s…`;
+    status.textContent=`🔄 Redialing in ${redialDelay/1000}s…`;
     log(`Redial scheduled (${redialDelay/1000}s)`);
     callBtn.disabled=true; retryBtn.disabled=true; endBtn.disabled=true; enablePad(false);
   }
@@ -115,20 +124,30 @@ button[disabled]{background:#aaa;cursor:not-allowed}
   function resetUI(){
     clearRedial(); activeConn=currentSid=null; enablePad(false);
     callBtn.disabled=false; endBtn.disabled=true; retryBtn.disabled=true;
-    status.textContent='Ready';
+    status.textContent='✅ Ready to dial';
   }
 
   /* 5️⃣  Buttons */
-  callBtn.onclick = ()=>{
+  const handleCallStart = ()=>{
     const n=phoneInp.value.trim();
-    if(!n){ status.textContent='Enter a valid number'; return; }
+    if(!n){ status.textContent='⚠️ Enter a valid number'; return; }
     startCall(n);
   };
+
+  callBtn.onclick = handleCallStart;
   endBtn.onclick   = async()=>{ await endCurrentCall(); resetUI(); };
   retryBtn.onclick = async()=>{
     if(!activeConn && !currentSid) return;
     await endCurrentCall(); scheduleRedial();
   };
+
+  // Handle Enter key in phone input
+  phoneInp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !callBtn.disabled) {
+      e.preventDefault();
+      handleCallStart();
+    }
+  });
 })();
 </script>
 </body>

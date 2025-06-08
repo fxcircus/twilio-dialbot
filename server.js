@@ -41,6 +41,11 @@ app.get('/config', (_req, res) =>
   res.json({ redialDelayMs: Number(REDIAL_DELAY_MS) })
 );
 
+/* ══ 2b. Get default number if set ══════════════════════════════ */
+app.get('/default-number', (_req, res) =>
+  res.json({ number: process.env.NUMBER_TO_CALL || null })
+);
+
 /* ══ 3. Start outbound call ═════════════════════════════════════ */
 app.post('/call', async (req, res) => {
   const { phoneNumber } = req.body;
