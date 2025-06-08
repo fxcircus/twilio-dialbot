@@ -13,7 +13,7 @@ A minimal browser‑to‑PSTN dialer built with **Twilio Client SDK v1.13** a
 3. [Environment Variables](#environment-variables)
 4. [Quick Start](#quick-start)
 5. [Usage](#usage)
-6. [Call Recording](#call-recording)
+6. [Call Recording](#call-recording)
 7. [Twilio Setup Checklist](#twilio-setup-checklist)
 8. [Folder Structure](#folder-structure)
 
@@ -96,14 +96,14 @@ open https://<ngrok-id>.ngrok-free.app
 
 ---
 
-## Call Recording
+### Call Recording
 
 | Fact       | Value                                            |
 | ---------- | ------------------------------------------------ |
 | Mode       | `record-from-answer` (mono)                      |
-| Cost       | Call \$0.014 / min   +  Recording \$0.0025 / min |
-| Storage    | First 10 000 min free, then \$0.0005 / min·month |
-| Auto‑prune | Voicemail or <30 s calls deleted by webhook      |
+| Cost       | Call \$0.014 / min   +  Recording \$0.0025 / min |
+| Storage    | First 10 000 min free, then \$0.0005 / min·month |
+| Auto‑prune | Voicemail or <30 s calls deleted by webhook      |
 
 Access recordings from  https://console.twilio.com/us1/monitor/logs/call-recordings?frameUrl=/console/voice/recordings/recording-logs?x-target-region=us1
 
