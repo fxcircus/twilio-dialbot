@@ -48,18 +48,20 @@ Create `.env` in project root:
 
 ```ini
 # Twilio creds
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_API_KEY_SID=
-TWILIO_API_KEY_SECRET=
-TWILIO_NUMBER=+1XXXXXXXXXX
+TWILIO_ACCOUNT_SID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx # https://console.twilio.com/ ➜ Account SID
+TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx # https://console.twilio.com/ ➜ Auth Token
+TWILIO_API_KEY_SID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx # Create from https://console.twilio.com/ ➜ API keys
+TWILIO_API_KEY_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx # Create from https://console.twilio.com/ ➜ API keys
+TWILIO_NUMBER=+1xxxxxxxxxx # Your phone number in Twillio
+TWIML_APP_SID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # Server
-SERVER_URL=https://xxxx-xx-xxx-xxx.ngrok-free.app  # public HTTPS url
-PORT=3000                                           # optional
+SERVER_URL=https://xxxx-xx-xxx-xxx-xxx.ngrok-free.app
+PORT=3000
 
 # Dialbot behaviour
-REDIAL_DELAY_MS=60000      # 1 min between attempts
+REDIAL_DELAY_MS=60000      # 1 minute (change as needed)
+NUMBER_TO_CALL= +1xxxxxxxxxx # pre-fill number
 ```
 
 ---
@@ -128,6 +130,5 @@ Access recordings from  https://console.twilio.com/us1/monitor/logs/call-recordi
 server.js            # Express API + Twilio logic
 public/
   └─ index.html      # UI – dialer, keypad, log
-.env.example         # Sample env file
-README.md            # You are here
+  └─ styles.css      # UI – CSS styling
 ```
