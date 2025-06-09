@@ -1,32 +1,34 @@
-# Twilio Dialbot
+# Twilio Dialbot
 
-A minimal browser‑to‑PSTN dialer built with **Twilio Client SDK v1.13** and Node.js. One click places a call, bridges audio back to your browser, lets you navigate phone menus with a keypad, auto‑redials, and records only the calls that were answered by a human.
+A minimal browser‑to‑PSTN dialer built with **Twilio Client SDK v1.13** and Node.js. One click places a call, bridges audio back to your browser, lets you navigate phone menus with a keypad, auto‑redials, and records only the calls that were answered by a human.
 
 ![screenshot](./public/screenshot.png)
 
 ---
 
-## 📑 Table of Contents
+## 📑 Table of Contents
 
 1. [Features](#features)
 2. [Requirements](#requirements)
-3. [Environment Variables](#environment-variables)
-4. [Quick Start](#quick-start)
+3. [Environment Variables](#environment-variables)
+4. [Quick Start](#quick-start)
 5. [Usage](#usage)
-6. [Call Recording](#call-recording)
-7. [Twilio Setup Checklist](#twilio-setup-checklist)
-8. [Folder Structure](#folder-structure)
+6. [Troubleshooting](#troubleshooting)
+7. [Call Recording](#call-recording)
+8. [Twilio Setup Checklist](#twilio-setup-checklist)
+9. [Folder Structure](#folder-structure)
 
 ---
 
 ### Features
 
-* ✅ One‑click outbound call from browser
-* ✅ Automatic bridge when callee answers (no ringtone audible to them)
-* ✅ 12‑button DTMF keypad (0‑9 \* #)
-* ✅ Hang‑up & Redial loop (delay configurable)
-* ✅ Live log panel: dial attempts, redials, DTMF, status
-* ✅ Mono call recording **from answer only**; voicemail/short calls auto‑deleted
+* ✅ One‑click outbound call from browser
+* ✅ Automatic bridge when callee answers (no ringtone audible to them)
+* ✅ 12‑button DTMF keypad (0‑9 \* #)
+* ✅ Hang‑up & Redial loop (delay configurable)
+* ✅ Live log panel: dial attempts, redials, DTMF, status
+* ✅ Mono call recording **from answer only**; voicemail/short calls auto‑deleted
+* ✅ **Audio device selection** for external interfaces and USB microphones
 
 ---
 
@@ -34,16 +36,16 @@ A minimal browser‑to‑PSTN dialer built with **Twilio Client SDK v1.13** a
 
 | Item                        | Notes                                               |
 | --------------------------- | --------------------------------------------------- |
-| **Twilio account**          | Free account works; must have Voice‑enabled phone # |
-| **Twilio phone number**     | Buy or port one from Console → Phone Numbers        |
-| **Node ≥ 18**               | Local server & token generator                      |
-| **ngrok** (or other tunnel) | Exposes `localhost:3000` to Twilio webhooks (HTTPS) |
+| **Twilio account**          | Free account works; must have Voice‑enabled phone # |
+| **Twilio phone number**     | Buy or port one from Console → Phone Numbers        |
+| **Node ≥ 18**               | Local server & token generator                      |
+| **ngrok** (or other tunnel) | Exposes `localhost:3000` to Twilio webhooks (HTTPS) |
 
 > For production deploy the server to Render / Fly / Heroku and drop ngrok.
 
 ---
 
-### Environment Variables
+### Environment Variables
 Create `.env` in project root:
 
 ```ini
@@ -66,24 +68,24 @@ NUMBER_TO_CALL= +1xxxxxxxxxx # pre-fill number
 
 ---
 
-### Quick Start
+### Quick Start
 
 ```bash
-# 1 Clone & install
+# 1 Clone & install
 git clone https://github.com/<you>/twilio-dialbot
 cd twilio-dialbot
 npm install
 
-# 2 Create .env → fill creds
+# 2 Create .env → fill creds
 cp .env.example .env
 
-# 3 Run server
+# 3 Run server
 node server.js    # on port 3000
 
-# 4 Expose to Twilio
+# 4 Expose to Twilio
 ngrok http 3000   # copy HTTPS → SERVER_URL in .env
 
-# 5 Open UI
+# 5 Open UI
 open https://<ngrok-id>.ngrok-free.app
 ```
 
@@ -91,10 +93,38 @@ open https://<ngrok-id>.ngrok-free.app
 
 ### Usage
 
-1. Type the destination number (`+1…`) → **Call**.
-2. Once connected, status changes to *Connected – speak!*.
-3. Use **keypad** for IVRs.
-4. **Hang‑up & Redial** ends the call and retries after the delay.
+1. **Grant microphone permissions** when prompted (required for audio device enumeration)
+2. **Select your audio devices** from the dropdown menus:
+   - Choose your speaker/audio interface from the 🔊 **Speaker** dropdown
+   - Choose your microphone/USB mic from the 🎤 **Microphone** dropdown
+3. Type the destination number (`+1…`) → **Call** (button only enables after device selection)
+4. Once connected, status changes to *Connected – speak!*
+5. Use **keypad** for IVRs
+6. **Hang‑up & Redial** ends the call and retries after the delay
+
+---
+
+### Troubleshooting
+
+#### Audio Device Issues
+
+If you're using external audio devices (audio interfaces, USB microphones, etc.), you may need to explicitly grant microphone permissions to your browser:
+
+![troubleshoot](./public/troubleshoot.png)
+
+**Steps to fix:**
+1. Go to your browser settings (Chrome: `chrome://settings/content/microphone`)
+2. Find your localhost site (e.g., `http://localhost:3000`)
+3. Set **Microphone** permission to **"Allow"**
+4. Refresh the page and click **🔄 Refresh Devices** if needed
+
+**Common symptoms:**
+- Empty device dropdowns
+- "Device enumeration error" in logs  
+- "Unable to set audio output devices" warnings
+- AudioContext errors
+
+The app requires microphone access to enumerate and select your specific audio devices, especially when using professional audio interfaces that don't appear as "default" system devices.
 
 ---
 
@@ -113,22 +143,23 @@ Access recordings from  https://console.twilio.com/us1/monitor/logs/call-recordi
 
 ---
 
-### Twilio Setup Checklist
+### Twilio Setup Checklist
 
 1. **Sign in** at [https://console.twilio.com/](https://console.twilio.com/).
-2. **Buy a Voice number** (Console → Phone Numbers → *Buy*).
-3. **Create API Key** (Console → Account → API Keys → *Create standard key*).
-4. **Copy** SID / Auth Token / Key SID / Key Secret into `.env`.
+2. **Buy a Voice number** (Console → Phone Numbers → *Buy*).
+3. **Create API Key** (Console → Account → API Keys → *Create standard key*).
+4. **Copy** SID / Auth Token / Key SID / Key Secret into `.env`.
 5. **Run ngrok** and set `SERVER_URL`.
-6. Done – no console webhooks needed; Dialbot supplies `/twiml` & `/call-status` dynamically.
+6. Done – no console webhooks needed; Dialbot supplies `/twiml` & `/call-status` dynamically.
 
 ---
 
-### Folder Structure
+### Folder Structure
 
 ```
 server.js            # Express API + Twilio logic
 public/
   └─ index.html      # UI – dialer, keypad, log
   └─ styles.css      # UI – CSS styling
+  └─ troubleshoot.png # Browser permissions screenshot
 ```

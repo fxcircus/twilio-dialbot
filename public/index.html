@@ -14,6 +14,23 @@
     <input id="phone" type="tel" placeholder="+1xxxxxxxxxx"/>
   </div>
   
+  <!-- Audio Device Selection -->
+  <div class="audio-controls">
+    <div class="device-group">
+      <label for="speakerSelect">🔊 Speaker:</label>
+      <select id="speakerSelect">
+        <option value="">Select speaker...</option>
+      </select>
+    </div>
+    <div class="device-group">
+      <label for="micSelect">🎤 Microphone:</label>
+      <select id="micSelect">
+        <option value="">Select microphone...</option>
+      </select>
+    </div>
+    <button id="refreshDevices">🔄 Refresh Devices</button>
+  </div>
+  
   <div class="button-group">
     <button id="callBtn" disabled>📞 Start Call</button>
     <button id="endBtn" disabled>📴 End Call</button>
@@ -37,10 +54,56 @@
   const status=$('status'), padDiv=$('pad'), logBox=$('logBox');
   const callBtn=$('callBtn'), endBtn=$('endBtn'), retryBtn=$('retryBtn');
   const phoneInp=$('phone');
+  const speakerSelect=$('speakerSelect'), micSelect=$('micSelect');
+  const refreshDevicesBtn=$('refreshDevices');
 
   /* State */
   let activeConn=null, currentSid=null, lastNumber=null;
   let redialDelay=60000, redialTimer=null, redialCount=0;
+  let deviceReady=false;
+
+  /* Audio Context Management */
+  let audioContext = null;
+  const initAudioContext = () => {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioContext.state === 'suspended') {
+      return audioContext.resume();
+    }
+    return Promise.resolve();
+  };
+
+  /* Device enumeration */
+  const populateDevices = async () => {
+    try {
+      // Request permissions first
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      
+      // Clear existing options
+      speakerSelect.innerHTML = '<option value="">Select speaker...</option>';
+      micSelect.innerHTML = '<option value="">Select microphone...</option>';
+      
+      devices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.textContent = device.label || `${device.kind} ${device.deviceId.slice(0, 8)}`;
+        
+        if (device.kind === 'audiooutput') {
+          speakerSelect.appendChild(option);
+        } else if (device.kind === 'audioinput') {
+          micSelect.appendChild(option);
+        }
+      });
+      
+      log('Audio devices enumerated');
+    } catch (err) {
+      log(`Device enumeration error: ${err.message}`);
+      status.textContent = '⚠️ Microphone access required';
+    }
+  };
 
   /* 1️⃣  Config + token + default number */
   redialDelay = (await fetch('/config').then(r=>r.json())).redialDelayMs || 60000;
@@ -53,23 +116,27 @@
     phoneInp.placeholder = defaultNumber;
   }
 
-  /* 2️⃣  Twilio Device */
-  Twilio.Device.setup(token,{debug:false,sounds:false});
-  Twilio.Device.audio.incoming(false);
-  Twilio.Device.audio.outgoing(false);
-  Twilio.Device.audio.disconnect(false);
+  /* 2️⃣  Twilio Device Setup */
+  Twilio.Device.setup(token, {debug: false});
+  
+  // Enable audio (remove the previous disabling lines)
+  // Audio devices will be set when user selects them
 
-  Twilio.Device.on('ready', ()=>{
-    status.textContent='✅ Ready to dial'; 
+  Twilio.Device.on('ready', async ()=>{
+    deviceReady = true;
+    await populateDevices();
+    status.textContent='✅ Ready to dial - Select audio devices'; 
     status.classList.remove('loading');
-    callBtn.disabled=false; 
+    // Don't enable call button until devices are selected
     log('Device ready');
   });
+  
   Twilio.Device.on('error', e=>{
     status.textContent='❌ Device error'; 
     status.classList.remove('loading');
     log(`Device error: ${e.message}`);
   });
+  
   Twilio.Device.on('incoming', conn=>{
     conn.accept();
     activeConn=conn; endBtn.disabled=false; retryBtn.disabled=false; enablePad(true);
@@ -77,6 +144,39 @@
     log('Call connected');
     conn.on('disconnect', ()=>{ log('Call disconnected'); resetUI(); });
   });
+
+  /* Audio Device Selection Handlers */
+  const updateAudioDevices = async () => {
+    if (!deviceReady) return;
+    
+    const speakerId = speakerSelect.value;
+    const micId = micSelect.value;
+    
+    try {
+      // Set audio devices if selected
+      if (speakerId) {
+        await Twilio.Device.audio.speakerDevices.set([speakerId]);
+        log(`Speaker set: ${speakerSelect.selectedOptions[0]?.text}`);
+      }
+      if (micId) {
+        await Twilio.Device.audio.ringtoneDevices.set([micId]);
+        log(`Microphone set: ${micSelect.selectedOptions[0]?.text}`);
+      }
+      
+      // Enable call button if both devices are selected
+      if (speakerId && micId) {
+        callBtn.disabled = false;
+        status.textContent = '✅ Ready to dial';
+      }
+    } catch (err) {
+      log(`Audio device error: ${err.message}`);
+      status.textContent = '⚠️ Audio device setup failed';
+    }
+  };
+
+  speakerSelect.onchange = updateAudioDevices;
+  micSelect.onchange = updateAudioDevices;
+  refreshDevicesBtn.onclick = populateDevices;
 
   /* 3️⃣  Keypad */
   "123456789*0#".split('').forEach(d=>{
@@ -90,6 +190,13 @@
 
   /* 4️⃣  Call helpers */
   async function startCall(num){
+    // Initialize audio context on user gesture
+    try {
+      await initAudioContext();
+    } catch (err) {
+      log(`AudioContext error: ${err.message}`);
+    }
+    
     lastNumber=num; callBtn.disabled=true;
     status.textContent='📞 Dialing…'; log(`Dial → ${num}`);
     const { callSid } = await fetch('/call',{
@@ -123,14 +230,23 @@
 
   function resetUI(){
     clearRedial(); activeConn=currentSid=null; enablePad(false);
-    callBtn.disabled=false; endBtn.disabled=true; retryBtn.disabled=true;
-    status.textContent='✅ Ready to dial';
+    // Only enable call button if devices are selected
+    const devicesSelected = speakerSelect.value && micSelect.value;
+    callBtn.disabled = !devicesSelected;
+    endBtn.disabled=true; retryBtn.disabled=true;
+    status.textContent = devicesSelected ? '✅ Ready to dial' : '✅ Ready - Select audio devices';
   }
 
   /* 5️⃣  Buttons */
-  const handleCallStart = ()=>{
+  const handleCallStart = async ()=>{
     const n=phoneInp.value.trim();
     if(!n){ status.textContent='⚠️ Enter a valid number'; return; }
+    
+    if(!speakerSelect.value || !micSelect.value) {
+      status.textContent='⚠️ Select audio devices first';
+      return;
+    }
+    
     startCall(n);
   };
 
