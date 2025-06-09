@@ -14,32 +14,68 @@
     <input id="phone" type="tel" placeholder="+1xxxxxxxxxx"/>
   </div>
   
-  <!-- Audio Device Selection -->
-  <div class="audio-controls">
-    <div class="device-group">
-      <label for="speakerSelect">🔊 Speaker:</label>
-      <select id="speakerSelect">
-        <option value="">Select speaker...</option>
-      </select>
-    </div>
-    <div class="device-group">
-      <label for="micSelect">🎤 Microphone:</label>
-      <select id="micSelect">
-        <option value="">Select microphone...</option>
-      </select>
-    </div>
-    <button id="refreshDevices">🔄 Refresh Devices</button>
-  </div>
-  
   <div class="button-group">
     <button id="callBtn" disabled>📞 Start Call</button>
     <button id="endBtn" disabled>📴 End Call</button>
     <button id="retryBtn" disabled>🔄 Hang-up & Redial</button>
+    <button id="settingsBtn">⚙️ Settings</button>
   </div>
 
   <div id="pad"></div>
   <div id="status" class="loading">🔄 Loading Twilio Device…</div>
   <div id="logBox"></div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>⚙️ Settings</h3>
+      <span class="close">&times;</span>
+    </div>
+    <div class="modal-body">
+      <!-- Audio Device Selection -->
+      <div class="settings-section">
+        <h4>🔊 Audio Devices</h4>
+        <div class="device-group">
+          <label for="speakerSelect">Speaker:</label>
+          <select id="speakerSelect">
+            <option value="">Select speaker...</option>
+          </select>
+        </div>
+        <div class="device-group">
+          <label for="micSelect">Microphone:</label>
+          <select id="micSelect">
+            <option value="">Select microphone...</option>
+          </select>
+        </div>
+        <button id="refreshDevices">🔄 Refresh Devices</button>
+      </div>
+
+      <!-- Redial Settings -->
+      <div class="settings-section">
+        <h4>🔄 Redial Settings</h4>
+        <div class="device-group">
+          <label for="redialInterval">Redial Interval:</label>
+          <select id="redialInterval">
+            <option value="60000">1 minute</option>
+            <option value="300000">5 minutes</option>
+            <option value="600000">15 minutes</option>
+            <option value="1800000">30 minutes</option>
+            <option value="2700000">45 minutes</option>
+            <option value="3600000">1 hour</option>
+            <option value="7200000">2 hours</option>
+            <option value="10800000">3 hours</option>
+            <option value="14400000">4 hours</option>
+            <option value="18000000">5 hours</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="saveSettings">💾 Save Settings</button>
+    </div>
+  </div>
 </div>
 
 <script src="https://sdk.twilio.com/js/client/v1.13/twilio.min.js"></script>
@@ -51,11 +87,21 @@
                      logBox.textContent += `[${t}] ${m}\n`;
                      logBox.scrollTop = logBox.scrollHeight; };
 
+  // Helper function to format time
+  const formatTime = (ms) => {
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+  };
+
   const status=$('status'), padDiv=$('pad'), logBox=$('logBox');
   const callBtn=$('callBtn'), endBtn=$('endBtn'), retryBtn=$('retryBtn');
-  const phoneInp=$('phone');
+  const settingsBtn=$('settingsBtn'), phoneInp=$('phone');
   const speakerSelect=$('speakerSelect'), micSelect=$('micSelect');
-  const refreshDevicesBtn=$('refreshDevices');
+  const refreshDevicesBtn=$('refreshDevices'), redialIntervalSelect=$('redialInterval');
+  const settingsModal=$('settingsModal'), saveSettingsBtn=$('saveSettings');
 
   /* State */
   let activeConn=null, currentSid=null, lastNumber=null;
@@ -105,8 +151,52 @@
     }
   };
 
+  /* Settings Management */
+  const loadSettings = () => {
+    const savedSpeaker = localStorage.getItem('dialbot-speaker');
+    const savedMic = localStorage.getItem('dialbot-mic');
+    const savedRedialDelay = localStorage.getItem('dialbot-redial-delay');
+    
+    if (savedSpeaker) speakerSelect.value = savedSpeaker;
+    if (savedMic) micSelect.value = savedMic;
+    if (savedRedialDelay) {
+      redialDelay = parseInt(savedRedialDelay);
+      redialIntervalSelect.value = savedRedialDelay;
+    }
+  };
+
+  const saveSettings = () => {
+    localStorage.setItem('dialbot-speaker', speakerSelect.value);
+    localStorage.setItem('dialbot-mic', micSelect.value);
+    localStorage.setItem('dialbot-redial-delay', redialIntervalSelect.value);
+    redialDelay = parseInt(redialIntervalSelect.value);
+    
+    log(`Settings saved - Redial: ${formatTime(redialDelay)}`);
+    updateAudioDevices();
+    settingsModal.style.display = 'none';
+  };
+
+  /* Modal handlers */
+  settingsBtn.onclick = () => {
+    loadSettings();
+    settingsModal.style.display = 'block';
+  };
+
+  settingsModal.querySelector('.close').onclick = () => {
+    settingsModal.style.display = 'none';
+  };
+
+  window.onclick = (e) => {
+    if (e.target === settingsModal) {
+      settingsModal.style.display = 'none';
+    }
+  };
+
+  saveSettingsBtn.onclick = saveSettings;
+
   /* 1️⃣  Config + token + default number */
-  redialDelay = (await fetch('/config').then(r=>r.json())).redialDelayMs || 60000;
+  const config = await fetch('/config').then(r=>r.json());
+  redialDelay = config.redialDelayMs || 60000;
   const { token } = await fetch('/token').then(r=>r.json());
   
   // Check for default number from environment
@@ -115,6 +205,9 @@
     phoneInp.value = defaultNumber;
     phoneInp.placeholder = defaultNumber;
   }
+
+  // Set default redial interval in dropdown
+  redialIntervalSelect.value = redialDelay.toString();
 
   /* 2️⃣  Twilio Device Setup */
   Twilio.Device.setup(token, {debug: false});
@@ -125,7 +218,8 @@
   Twilio.Device.on('ready', async ()=>{
     deviceReady = true;
     await populateDevices();
-    status.textContent='✅ Ready to dial - Select audio devices'; 
+    loadSettings(); // Load saved settings after devices are populated
+    status.textContent='✅ Ready to dial - Configure settings first'; 
     status.classList.remove('loading');
     // Don't enable call button until devices are selected
     log('Device ready');
@@ -222,8 +316,8 @@
       redialTimer=null; redialCount++; log(`⇪ Redial #${redialCount}`);
       startCall(lastNumber);
     }, redialDelay);
-    status.textContent=`🔄 Redialing in ${redialDelay/1000}s…`;
-    log(`Redial scheduled (${redialDelay/1000}s)`);
+    status.textContent=`🔄 Redialing in ${formatTime(redialDelay)}…`;
+    log(`Redial scheduled (${formatTime(redialDelay)})`);
     callBtn.disabled=true; retryBtn.disabled=true; endBtn.disabled=true; enablePad(false);
   }
   const clearRedial = ()=>{ if(redialTimer){ clearTimeout(redialTimer); redialTimer=null; } };
@@ -234,7 +328,7 @@
     const devicesSelected = speakerSelect.value && micSelect.value;
     callBtn.disabled = !devicesSelected;
     endBtn.disabled=true; retryBtn.disabled=true;
-    status.textContent = devicesSelected ? '✅ Ready to dial' : '✅ Ready - Select audio devices';
+    status.textContent = devicesSelected ? '✅ Ready to dial' : '✅ Ready - Configure settings first';
   }
 
   /* 5️⃣  Buttons */
@@ -243,7 +337,7 @@
     if(!n){ status.textContent='⚠️ Enter a valid number'; return; }
     
     if(!speakerSelect.value || !micSelect.value) {
-      status.textContent='⚠️ Select audio devices first';
+      status.textContent='⚠️ Configure audio devices in settings first';
       return;
     }
     

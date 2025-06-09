@@ -39,65 +39,6 @@ h2 {
   margin-bottom: 0.8rem;
 }
 
-.audio-controls {
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(5px);
-}
-
-.device-group {
-  margin-bottom: 0.8rem;
-}
-
-.device-group label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #2d3748;
-  margin-bottom: 0.3rem;
-}
-
-.device-group select {
-  width: 100%;
-  padding: 0.6rem 0.8rem;
-  font-size: 0.85rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
-  transition: all 0.3s ease;
-  outline: none;
-  cursor: pointer;
-}
-
-.device-group select:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-#refreshDevices {
-  width: 100%;
-  padding: 0.6rem 1rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  background: linear-gradient(135deg, #9f7aea, #805ad5);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 0.4rem;
-}
-
-#refreshDevices:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(159, 122, 234, 0.4);
-}
-
 input {
   width: 100%;
   padding: 0.8rem 1rem;
@@ -183,6 +124,17 @@ button:hover:before {
 #retryBtn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(237, 137, 54, 0.5);
+}
+
+#settingsBtn {
+  background: linear-gradient(135deg, #9f7aea, #805ad5);
+  color: white;
+  box-shadow: 0 3px 12px rgba(159, 122, 234, 0.4);
+}
+
+#settingsBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(159, 122, 234, 0.5);
 }
 
 button:disabled {
@@ -319,4 +271,171 @@ button:disabled {
 
 .loading {
   animation: pulse 2s infinite;
+}
+
+/* Modal Styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  margin: 5% auto;
+  padding: 0;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.modal-header h3 {
+  color: #2d3748;
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.close {
+  color: #718096;
+  font-size: 2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  line-height: 1;
+}
+
+.close:hover {
+  color: #2d3748;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-section {
+  margin-bottom: 2rem;
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-section h4 {
+  color: #2d3748;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.2);
+}
+
+.device-group {
+  margin-bottom: 1rem;
+}
+
+.device-group label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.5rem;
+}
+
+.device-group select {
+  width: 100%;
+  padding: 0.8rem;
+  font-size: 0.9rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  transition: all 0.3s ease;
+  outline: none;
+  cursor: pointer;
+}
+
+.device-group select:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  transform: translateY(-1px);
+}
+
+#refreshDevices {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #9f7aea, #805ad5);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 0.5rem;
+}
+
+#refreshDevices:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(159, 122, 234, 0.4);
+}
+
+#saveSettings {
+  padding: 0.8rem 2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #48bb78, #38a169);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#saveSettings:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(72, 187, 120, 0.5);
 } 
