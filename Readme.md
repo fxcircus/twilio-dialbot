@@ -3,7 +3,7 @@
 A minimal browser‑to‑PSTN dialer built with **Twilio Client SDK v1.13** and Node.js. One click places a call, bridges audio back to your browser, lets you navigate phone menus with a keypad, auto‑redials, and records only the calls that were answered by a human.
 Works with built in speaker \ mic or external audio devices.
 
-![screenshot](./public/app_screenshot_main.png)
+![screenshot](./public/app_screenshot_main_screen.png)
 ![screenshot](./public/app_screenshot_settings_modal.png)
 
 ---
