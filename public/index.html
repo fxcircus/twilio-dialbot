@@ -219,6 +219,8 @@
     deviceReady = true;
     await populateDevices();
     loadSettings(); // Load saved settings after devices are populated
+    // Apply saved settings immediately so user can call without reopening modal
+    await updateAudioDevices();
     status.textContent='✅ Ready to dial - Configure settings first'; 
     status.classList.remove('loading');
     // Don't enable call button until devices are selected

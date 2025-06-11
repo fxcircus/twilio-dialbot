@@ -26,11 +26,17 @@ const VoiceGrant  = AccessToken.VoiceGrant;
 
 /* ══ 1. Capability token ════════════════════════════════════════ */
 app.get('/token', (_req, res) => {
+  // Token TTL: default 12 h (43 200 s) — can be overridden via env TOKEN_TTL_SECONDS
+  const TOKEN_TTL_SECONDS = Number(process.env.TOKEN_TTL_SECONDS || 43200);
+
   const token = new AccessToken(
     TWILIO_ACCOUNT_SID,
     TWILIO_API_KEY_SID,
     TWILIO_API_KEY_SECRET,
-    { identity: 'browserUser' }
+    {
+      identity: 'browserUser',
+      ttl: TOKEN_TTL_SECONDS > 86400 ? 86400 : TOKEN_TTL_SECONDS // Twilio max = 24 h
+    }
   );
   token.addGrant(new VoiceGrant({ incomingAllow: true }));
   res.json({ token: token.toJwt() });
