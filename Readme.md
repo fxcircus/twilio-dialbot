@@ -41,9 +41,9 @@ Works with built in speaker \ mic or external audio devices.
 | **Twilio account**          | Free account works; must have Voice‑enabled phone # |
 | **Twilio phone number**     | Buy or port one from Console → Phone Numbers        |
 | **Node ≥ 18**               | Local server & token generator                      |
-| **ngrok** (or other tunnel) | Exposes `localhost:3000` to Twilio webhooks (HTTPS) |
+| **ngrok** (manual install)  | Download from ngrok.com - IT may block npm version  |
 
-> For production deploy the server to Render / Fly / Heroku and drop ngrok.
+> **Note:** Due to IT security, ngrok must be installed manually from ngrok.com
 
 ---
 
@@ -57,10 +57,9 @@ TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx # https://console.twilio.com
 TWILIO_API_KEY_SID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx # Create from https://console.twilio.com/ ➜ API keys
 TWILIO_API_KEY_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx # Create from https://console.twilio.com/ ➜ API keys
 TWILIO_NUMBER=+1xxxxxxxxxx # Your phone number in Twillio
-TWIML_APP_SID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # Server
-SERVER_URL=https://xxxx-xx-xxx-xxx-xxx.ngrok-free.app
+SERVER_URL=https://your-ngrok-id.ngrok.io  # Required - get from ngrok http 3000
 PORT=3000
 
 # Dialbot behaviour
@@ -81,14 +80,15 @@ npm install
 # 2 Create .env → fill creds
 cp .env.example .env
 
-# 3 Run server
-node server.js    # on port 3000
+# 3 In a separate terminal, start ngrok
+ngrok http 3000
+# Copy the HTTPS URL to SERVER_URL in .env
 
-# 4 Expose to Twilio
-ngrok http 3000   # copy HTTPS → SERVER_URL in .env
+# 4 Run server
+npm start
 
 # 5 Open UI
-open https://<ngrok-id>.ngrok-free.app
+open http://localhost:3000
 ```
 
 ---
