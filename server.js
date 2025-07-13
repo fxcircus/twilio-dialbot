@@ -44,11 +44,14 @@ const callStates = new Map(); // Track call states and transcriptions
 // {
 //   callSid: string,
 //   phoneNumber: string,
-//   status: 'dialing' | 'ivr_detected' | 'waiting' | 'human_detected' | 'connected',
-//   transcriptions: [],
-//   humanDetected: false,
+//   status: 'dialing' | 'connecting' | 'connected' | 'completed',
 //   recordingSid: null,
-//   startTime: Date
+//   recordingStatus: 'none' | 'recording' | 'completed' | 'failed',
+//   recordings: [],  // Array of completed recordings
+//   startTime: Date,
+//   profile: object,  // Active profile configuration
+//   shouldRedial: boolean,
+//   redialDelay: number
 // }
 
 /* ══ 1. Capability token ════════════════════════════════════════ */
@@ -89,12 +92,51 @@ app.get('/default-number', (_req, res) =>
   res.json({ number: process.env.NUMBER_TO_CALL || null })
 );
 
+/* ══ 2c. Get available profiles ═════════════════════════════════ */
+app.get('/api/profiles', (_req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const profilesDir = path.join(__dirname, 'public', 'profiles');
+  
+  try {
+    const files = fs.readdirSync(profilesDir);
+    const profiles = files
+      .filter(file => file.endsWith('.json'))
+      .map(file => {
+        const content = fs.readFileSync(path.join(profilesDir, file), 'utf8');
+        return JSON.parse(content);
+      });
+    
+    res.json(profiles);
+  } catch (err) {
+    console.error('Error loading profiles:', err);
+    res.json([]);
+  }
+});
+
 /* ══ 3. Start outbound call ═════════════════════════════════════ */
 app.post('/call', async (req, res) => {
-  const { phoneNumber } = req.body;
+  const { phoneNumber, profileId } = req.body;
+  
+  // Load profile if specified
+  let profile = null;
+  if (profileId) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const profilePath = path.join(__dirname, 'public', 'profiles', `${profileId}.json`);
+      const profileContent = fs.readFileSync(profilePath, 'utf8');
+      profile = JSON.parse(profileContent);
+      console.log(`📋 Using profile: ${profile.name}`);
+    } catch (err) {
+      console.error(`Failed to load profile ${profileId}:`, err);
+    }
+  }
+  
   try {
     console.log('\n════════════════════════════════════════');
     console.log('📞 POST /call - Creating outbound call');
+    console.log('🕐 Time:', new Date().toISOString());
     console.log('📱 Phone number:', phoneNumber);
     console.log('📞 From number:', TWILIO_NUMBER);
     console.log('🔗 Webhook URL:', `${SERVER_URL}/outbound-gather`);
@@ -113,23 +155,35 @@ app.post('/call', async (req, res) => {
       from: TWILIO_NUMBER,
       url: `${SERVER_URL}/outbound-gather`,
       statusCallback: `${SERVER_URL}/call-status`,
-      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
+      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+      method: 'POST'  // Explicitly set method
     };
     
     console.log('📤 Twilio call parameters:', JSON.stringify(callParams, null, 2));
+    
+    // Verify webhook URL is accessible
+    console.log('🔍 Verifying webhook URL is accessible...');
+    if (!SERVER_URL.includes('ngrok')) {
+      console.log('⚠️ WARNING: SERVER_URL does not appear to be an ngrok URL');
+    }
 
     const call = await twilioRest.calls.create(callParams);
+    
+    console.log('🌐 Call webhook will be:', call.url);
+    console.log('📞 Twilio Console URL:', `https://console.twilio.com/console/voice/calls/${call.sid}`);
 
     // Initialize call state
     callStates.set(call.sid, {
       callSid: call.sid,
       phoneNumber: phoneNumber,
       status: 'dialing',
-      transcriptions: [],
-      humanDetected: false,
       recordingSid: null,
+      recordingStatus: 'none',
+      recordings: [],
       startTime: new Date(),
-      shouldRedial: false
+      shouldRedial: false,
+      profile: profile,
+      redialDelay: 60
     });
 
     console.log('✅ Call created successfully!');
@@ -158,13 +212,16 @@ app.post('/end-call', async (req, res) => {
   }
 });
 
-/* ══ 5. Initial outbound call - with speech recognition ═════════ */
+
+/* ══ 5. Initial outbound call - with recording ══════════════════ */
 app.post('/outbound-gather', (req, res) => {
   console.log('\n════════════════════════════════════════');
+  console.log('🎆 CRITICAL: /outbound-gather webhook HIT!');
   console.log('📞 /outbound-gather webhook called');
   console.log('🕐 Time:', new Date().toISOString());
   console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
   console.log('🔗 SERVER_URL:', SERVER_URL);
+  console.log('🔍 Headers:', req.headers);
   
   try {
     const { CallSid, CallStatus, To, From, Direction } = req.body;
@@ -188,28 +245,28 @@ app.post('/outbound-gather', (req, res) => {
     // Update call state
     const callState = callStates.get(CallSid);
     if (callState) {
-      callState.status = 'listening';
-      console.log('✅ Found call state, status updated to: listening');
+      callState.status = 'connecting';
+      console.log('✅ Found call state, connecting to browser with recording');
     }
     
-    // Enable speech recognition with Gather
-    console.log('🎤 Setting up speech recognition...');
-    const gather = vr.gather({
-      input: 'speech',
-      speechTimeout: 3,  // 3 seconds of silence will complete the gather
-      timeout: 30,       // Total timeout of 30 seconds
-      language: 'en-US',
-      partialResultCallback: `${SERVER_URL}/transcribe/${CallSid}`,
-      action: `${SERVER_URL}/process-speech/${CallSid}`,
-      method: 'POST',
-      hints: 'agent, representative, dmv, department of motor vehicles, all agents are busy, please call back later, try your call again'
-    });
+    console.log('📞 Connecting to browser with call recording...');
     
-    // Keep listening
-    gather.pause({ length: 30 });
+    // Connect to browser with recording enabled
+    const dial = vr.dial({
+      action: `${SERVER_URL}/handle-dial-status/${CallSid}`,
+      method: 'POST',
+      record: 'record-from-answer-dual',  // Record both sides from answer
+      recordingStatusCallback: `${SERVER_URL}/recording-status/${CallSid}`,
+      recordingStatusCallbackMethod: 'POST',
+      recordingStatusCallbackEvent: ['in-progress', 'completed', 'failed']
+    });
+    dial.client('browserUser');
+    
+    console.log('🎙️ Browser will connect with dual-channel recording');
     
     const twimlResponse = vr.toString();
-    console.log('📤 TwiML Response with speech recognition enabled');
+    console.log('📤 TwiML Response:');
+    console.log(twimlResponse);
     console.log('════════════════════════════════════════\n');
     
     res.type('text/xml').send(twimlResponse);
@@ -224,197 +281,11 @@ app.post('/outbound-gather', (req, res) => {
   }
 });
 
-/* ══ 6. Real-time partial transcription ═════════════════════════ */
-app.post('/transcribe/:callSid', (req, res) => {
-  const { callSid } = req.params;
-  const { UnstableSpeechResult, StableSpeechResult, SequenceNumber } = req.body;
-  
-  const callState = callStates.get(callSid);
-  if (!callState) {
-    return res.sendStatus(200);
-  }
-  
-  const transcript = StableSpeechResult || UnstableSpeechResult || '';
-  
-  if (transcript) {
-    console.log(`[${callSid}] ${StableSpeechResult ? 'Stable' : 'Unstable'}: ${transcript}`);
-    
-    // Check if this is just a minor variation of the last transcript
-    const lastTranscript = callState.transcriptions[callState.transcriptions.length - 1];
-    const isMinorVariation = lastTranscript && 
-                           lastTranscript.type === 'unstable' && 
-                           !StableSpeechResult &&
-                           Math.abs(transcript.length - lastTranscript.text.length) <= 3 &&
-                           (transcript.includes(lastTranscript.text) || lastTranscript.text.includes(transcript));
-    
-    // Only store if it's not a minor variation
-    if (!isMinorVariation) {
-      callState.transcriptions.push({
-        text: transcript,
-        timestamp: new Date(),
-        type: StableSpeechResult ? 'stable' : 'unstable',
-        sequence: SequenceNumber
-      });
-    }
-    
-    // Check for DMV patterns
-    const lowerTranscript = transcript.toLowerCase();
-    
-    // Pattern 1: "all agents are busy" or variations
-    if (lowerTranscript.includes('all agents are') || 
-        lowerTranscript.includes('agents are currently busy') ||
-        lowerTranscript.includes('call back later') ||
-        lowerTranscript.includes('try your call later') ||
-        lowerTranscript.includes('try your call again') ||
-        lowerTranscript.includes('please call back') ||
-        lowerTranscript.includes('try again later')) {
-      console.log(`[${callSid}] ⚠️ AGENTS BUSY PATTERN DETECTED in transcript: "${transcript}"`);
-      callState.status = 'agents_busy';
-      callState.shouldRedial = true; // Set redial flag immediately
-      
-      // Add system message
-      callState.transcriptions.push({
-        text: "⚠️ Detected: All agents busy message",
-        timestamp: new Date(),
-        type: 'system',
-        sequence: -2
-      });
-    }
-    
-    // Pattern 2: "Welcome to the DMV" or Florida DMV variations
-    if (lowerTranscript.includes('welcome to the dmv') || 
-        lowerTranscript.includes('department of motor vehicles') ||
-        lowerTranscript.includes('department of highway safety') ||
-        lowerTranscript.includes('florida department of highway')) {
-      console.log(`[${callSid}] Detected: DMV IVR system`);
-      callState.status = 'ivr_detected';
-      
-      // Add system message
-      callState.transcriptions.push({
-        text: "🏢 Detected: DMV IVR system",
-        timestamp: new Date(),
-        type: 'system',
-        sequence: -2
-      });
-    }
-    
-    // Human detection patterns
-    const humanPatterns = [
-      'how can i help',
-      'speaking',
-      'this is',
-      'good morning',
-      'good afternoon',
-      'hello',
-      'yes?'
-    ];
-    
-    if (humanPatterns.some(pattern => lowerTranscript.includes(pattern))) {
-      console.log(`[${callSid}] Potential human detected!`);
-      callState.humanDetected = true;
-      callState.status = 'human_detected';
-    }
-  }
-  
-  res.sendStatus(200);
-});
+/* ══ 6. [REMOVED] Real-time transcription endpoints ══════════════ */
+// Transcription endpoints removed - using recording instead
 
-/* ══ 7. Process complete speech results ═════════════════════════ */
-app.post('/process-speech/:callSid', async (req, res) => {
-  const { callSid } = req.params;
-  const { SpeechResult } = req.body;
-  
-  const callState = callStates.get(callSid);
-  if (!callState) {
-    return res.sendStatus(200);
-  }
-  
-  console.log(`[${callSid}] Complete speech: ${SpeechResult}`);
-  
-  const vr = new twilio.twiml.VoiceResponse();
-  
-  // Handle different states
-  console.log(`[${callSid}] Processing speech - Current status: ${callState.status}`);
-  
-  if (callState.status === 'agents_busy') {
-    // Set redial flag and hang up
-    callState.shouldRedial = true;
-    console.log(`[${callSid}] ✅ AGENTS BUSY DETECTED - Setting redial flag and hanging up`);
-    
-    // Add system message to transcript
-    callState.transcriptions.push({
-      text: "🔄 All agents busy - hanging up and scheduling redial",
-      timestamp: new Date(),
-      type: 'system',
-      sequence: -1
-    });
-    
-    vr.hangup();
-  } else if (callState.status === 'ivr_detected' && !callState.humanDetected) {
-    // Say "Agent" twice
-    console.log(`[${callSid}] Saying 'Agent' to navigate IVR`);
-    
-    // Add system message to transcript
-    callState.transcriptions.push({
-      text: "🤖 Saying 'Agent' to navigate DMV menu",
-      timestamp: new Date(),
-      type: 'system',
-      sequence: -1
-    });
-    
-    vr.say('Agent');
-    vr.pause({ length: 2 });
-    vr.say('Agent');
-    vr.pause({ length: 2 });
-    
-    // Continue listening
-    const gather = vr.gather({
-      input: 'speech',
-      speechTimeout: 3,
-      timeout: 30,
-      language: 'en-US',
-      partialResultCallback: `${SERVER_URL}/transcribe/${callSid}`,
-      action: `${SERVER_URL}/process-speech/${callSid}`,
-      method: 'POST',
-      hints: 'agent, representative, try your call again, all agents are busy'
-    });
-    gather.pause({ length: 30 });
-  } else if (callState.humanDetected) {
-    // Human detected! Connect to browser and start recording
-    console.log(`[${callSid}] Human detected! Connecting to browser...`);
-    
-    // Start recording now
-    try {
-      const recording = await twilioRest.calls(callSid)
-        .recordings
-        .create({ recordingChannels: 'dual' });
-      callState.recordingSid = recording.sid;
-      console.log(`[${callSid}] Started recording: ${recording.sid}`);
-    } catch (err) {
-      console.error(`[${callSid}] Failed to start recording:`, err);
-    }
-    
-    // Connect to browser
-    callState.status = 'connected';
-    const dial = vr.dial();
-    dial.client('browserUser');
-  } else {
-    // Continue listening
-    const gather = vr.gather({
-      input: 'speech',
-      speechTimeout: 3,
-      timeout: 30,
-      language: 'en-US',
-      partialResultCallback: `${SERVER_URL}/transcribe/${callSid}`,
-      action: `${SERVER_URL}/process-speech/${callSid}`,
-      method: 'POST',
-      hints: 'agent, representative, try your call again, all agents are busy'
-    });
-    gather.pause({ length: 30 });
-  }
-  
-  res.type('text/xml').send(vr.toString());
-});
+/* ══ 7. [REMOVED] Process speech endpoint ════════════════════════ */
+// Speech processing endpoint removed - using recording instead
 
 /* ══ 8. Get call state for client ═══════════════════════════════ */
 app.get('/call-state/:callSid', (req, res) => {
@@ -428,19 +299,165 @@ app.get('/call-state/:callSid', (req, res) => {
   // Return relevant state info
   res.json({
     status: callState.status,
-    humanDetected: callState.humanDetected,
     shouldRedial: callState.shouldRedial,
-    transcriptions: callState.transcriptions.slice(-20), // Last 20 transcriptions
-    duration: Date.now() - callState.startTime.getTime()
+    redialDelay: callState.redialDelay,
+    duration: Date.now() - callState.startTime.getTime(),
+    recordingStatus: callState.recordingStatus || 'none',
+    recordingSid: callState.recordingSid,
+    recordings: callState.recordings || [],
+    profile: callState.profile ? {
+      id: callState.profile.id,
+      name: callState.profile.name,
+      icon: callState.profile.icon
+    } : null
   });
 });
 
-/* ══ 9. Call-status webhook ═════════════════════════════════════ */
+/* ══ 9. Inject speech into active call ══════════════════════════ */
+app.post('/inject-speech/:callSid', async (req, res) => {
+  const { callSid } = req.params;
+  const { text = 'Agent', repeat = 1 } = req.body;
+  
+  console.log(`💬 Injecting speech into call ${callSid}: "${text}" (repeat: ${repeat})`);
+  
+  try {
+    const callState = callStates.get(callSid);
+    if (!callState) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+    
+    // Create a conference if not already in one
+    // For now, we'll use a simpler approach - modify the call
+    // This would require updating the call's TwiML
+    
+    res.json({ 
+      success: true, 
+      message: 'Speech injection queued',
+      note: 'Feature requires conference setup for live injection'
+    });
+  } catch (err) {
+    console.error('Error injecting speech:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ══ 10. Recording status callback ═══════════════════════════════ */
+app.post('/recording-status/:callSid', (req, res) => {
+  const { callSid } = req.params;
+  const { RecordingSid, RecordingStatus, RecordingUrl, RecordingDuration } = req.body;
+  
+  console.log(`[${callSid}] Recording status: ${RecordingStatus}`);
+  
+  const callState = callStates.get(callSid);
+  if (!callState) {
+    console.error(`[${callSid}] No call state found for recording callback`);
+    return res.sendStatus(200);
+  }
+  
+  // Update call state with recording info
+  if (RecordingStatus === 'in-progress') {
+    callState.recordingSid = RecordingSid;
+    callState.recordingStatus = 'recording';
+    console.log(`[${callSid}] 🔴 Recording started: ${RecordingSid}`);
+  } else if (RecordingStatus === 'completed') {
+    callState.recordingStatus = 'completed';
+    callState.recordingUrl = RecordingUrl;
+    callState.recordingDuration = RecordingDuration;
+    console.log(`[${callSid}] ✅ Recording completed: ${RecordingDuration}s`);
+    console.log(`[${callSid}] 🔗 Recording URL: ${RecordingUrl}`);
+    
+    // Store recording info
+    callState.recordings = callState.recordings || [];
+    callState.recordings.push({
+      sid: RecordingSid,
+      url: RecordingUrl,
+      duration: RecordingDuration,
+      timestamp: new Date()
+    });
+  } else if (RecordingStatus === 'failed') {
+    callState.recordingStatus = 'failed';
+    console.error(`[${callSid}] ❌ Recording failed`);
+  }
+  
+  res.sendStatus(200);
+});
+
+/* ══ 11. Say Agent endpoint ═══════════════════════════════════════ */
+app.post('/say-agent/:callSid', async (req, res) => {
+  const { callSid } = req.params;
+  
+  console.log(`🗣️ Saying "Agent" into call ${callSid}`);
+  
+  try {
+    const callState = callStates.get(callSid);
+    if (!callState) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+    
+    // Update the call with TwiML that says "Agent" then reconnects
+    const twiml = new twilio.twiml.VoiceResponse();
+    
+    // Say "Agent" twice with a short pause
+    twiml.say({ voice: 'alice' }, 'Agent');
+    twiml.pause({ length: 1 });
+    twiml.say({ voice: 'alice' }, 'Agent');
+    twiml.pause({ length: 1 });
+    
+    // Redirect back to the gather endpoint to continue listening
+    twiml.redirect(`${process.env.SERVER_URL}/outbound-gather/${callState.phoneNumber}`);
+    
+    // Update the active call
+    await twilioRest.calls(callSid).update({
+      twiml: twiml.toString()
+    });
+    
+    console.log(`✅ Successfully updated call to say "Agent"`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Said "Agent" into the call'
+    });
+  } catch (err) {
+    console.error('Error saying Agent:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ══ 11. [REMOVED] Setup speech recognition ═════════════════════ */
+// Speech recognition setup removed - using recording instead
+
+/* ══ 12. [REMOVED] Continue speech recognition ══════════════════ */
+// Continue speech recognition removed - using recording instead
+
+/* ══ 13. Handle dial status callback ═════════════════════════════ */
+app.post('/handle-dial-status/:callSid', (req, res) => {
+  const { callSid } = req.params;
+  const { DialCallStatus } = req.body;
+  
+  console.log(`[${callSid}] Dial status: ${DialCallStatus}`);
+  
+  const callState = callStates.get(callSid);
+  if (callState) {
+    if (DialCallStatus === 'answered') {
+      callState.browserConnected = true;
+      callState.status = 'connected';
+      console.log(`[${callSid}] ✅ Browser connected successfully`);
+    } else if (DialCallStatus === 'completed') {
+      callState.browserConnected = false;
+      console.log(`[${callSid}] 📴 Browser disconnected`);
+    }
+  }
+  
+  res.sendStatus(200);
+});
+
+/* ══ 12. Call-status webhook ═════════════════════════════════════ */
 app.post('/call-status', async (req, res) => {
   const { CallSid, CallStatus, CallDuration, To, From } = req.body;
   
   console.log('\n════════════════════════════════════════');
   console.log(`📞 Call Status Update: ${CallStatus}`);
+  console.log(`🕐 Time: ${new Date().toISOString()}`);
   console.log(`📞 Call SID: ${CallSid}`);
   console.log(`📱 From: ${From} → To: ${To}`);
   if (CallDuration) console.log(`⏱️  Duration: ${CallDuration} seconds`);
@@ -451,8 +468,9 @@ app.post('/call-status', async (req, res) => {
     
     // Update call status
     if (CallStatus === 'completed') {
-      console.log(`✅ Call completed. Human detected: ${callState.humanDetected}`);
-      console.log(`📝 Total transcriptions: ${callState.transcriptions.length}`);
+      console.log(`✅ Call completed.`);
+      console.log(`🔄 Should redial: ${callState.shouldRedial}`);
+      console.log(`🔴 Recording status: ${callState.recordingStatus || 'none'}`);
       
       // Clean up state after 5 minutes
       setTimeout(() => {
@@ -460,6 +478,8 @@ app.post('/call-status', async (req, res) => {
       }, 5 * 60 * 1000);
     } else if (CallStatus === 'failed' || CallStatus === 'busy' || CallStatus === 'no-answer') {
       console.log(`❌ Call failed with status: ${CallStatus}`);
+    } else if (CallStatus === 'answered') {
+      console.log(`🎯 Call answered - webhook should be called soon`);
     }
   } else {
     console.log('⚠️  No call state found for this call');
@@ -469,7 +489,7 @@ app.post('/call-status', async (req, res) => {
   res.sendStatus(200);
 });
 
-/* ══ 10. Start server ════════════════════════════════════════════ */
+/* ══ 12. Start server ════════════════════════════════════════════ */
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
@@ -526,8 +546,8 @@ async function startServer() {
       console.log('🔗 Twilio webhook URLs:');
       console.log(`   - Voice URL: ${SERVER_URL}/outbound-gather`);
       console.log(`   - Status Callback: ${SERVER_URL}/call-status`);
-      console.log(`   - Transcribe Callback: ${SERVER_URL}/transcribe/:callSid`);
-      console.log(`   - Process Speech: ${SERVER_URL}/process-speech/:callSid\n`);
+      console.log(`   - Recording Status: ${SERVER_URL}/recording-status/:callSid`);
+      console.log(`   - Dial Status: ${SERVER_URL}/handle-dial-status/:callSid\n`);
     });
     
     // Graceful shutdown

@@ -1,0 +1,63 @@
+{
+  "id": "custom",
+  "name": "Custom Profile",
+  "description": "Template for creating your own profile",
+  "icon": "⚙️",
+  "numbers": [],
+  "businessHours": {
+    "timezone": "America/New_York",
+    "monday": { "enabled": true, "start": "09:00", "end": "17:00" },
+    "tuesday": { "enabled": true, "start": "09:00", "end": "17:00" },
+    "wednesday": { "enabled": true, "start": "09:00", "end": "17:00" },
+    "thursday": { "enabled": true, "start": "09:00", "end": "17:00" },
+    "friday": { "enabled": true, "start": "09:00", "end": "17:00" },
+    "saturday": { "enabled": false, "start": "09:00", "end": "13:00" },
+    "sunday": { "enabled": false, "start": "09:00", "end": "13:00" }
+  },
+  "patterns": [
+    {
+      "id": "example-busy",
+      "name": "Busy Pattern",
+      "detect": [
+        "all agents are busy",
+        "please try again later"
+      ],
+      "action": "redial",
+      "value": 300,
+      "description": "Example: Redial after 5 minutes when busy"
+    },
+    {
+      "id": "example-menu",
+      "name": "Menu Navigation",
+      "detect": [
+        "press 1 for",
+        "main menu"
+      ],
+      "action": "press",
+      "value": "1",
+      "description": "Example: Press 1 for menu option"
+    },
+    {
+      "id": "example-human",
+      "name": "Human Detection",
+      "detect": [
+        "how can i help",
+        "speaking"
+      ],
+      "action": "connect",
+      "record": true,
+      "alert": true,
+      "description": "Example: Connect when human detected"
+    }
+  ],
+  "redialSettings": {
+    "maxAttempts": 5,
+    "delaySeconds": 300,
+    "exponentialBackoff": false
+  },
+  "recordingSettings": {
+    "enabled": false,
+    "onlyHuman": true,
+    "minDuration": 2
+  }
+}

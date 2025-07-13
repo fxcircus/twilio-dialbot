@@ -10,16 +10,25 @@
 <div class="main-layout">
   <!-- Left Panel: Controls -->
   <div class="control-panel">
-    <h2>☎️ DialBot 🤖</h2>
+    <div class="header-with-help">
+      <h2>☎️ DialBot 🤖</h2>
+      <button id="helpBtn" class="help-btn" title="Help & Documentation">ⓘ</button>
+    </div>
     
     <div class="control-section">
+      <!-- Profile Selection -->
+      <div class="profile-selector">
+        <select id="profile-select" class="profile-select">
+          <option value="">No Profile - Manual Mode</option>
+        </select>
+        <button id="editProfiles" class="edit-profiles-btn" title="Edit profiles">✏️</button>
+      </div>
+      
       <div class="input-group">
-        <div class="phone-input-wrapper">
-          <input id="phone" type="tel" placeholder="+1xxxxxxxxxx"/>
-          <select id="phone-select" class="phone-select">
-            <option value="">📖 Phonebook</option>
-          </select>
-        </div>
+        <input id="phone" type="tel" placeholder="+1xxxxxxxxxx"/>
+        <select id="phone-select" class="phone-select">
+          <option value="">📖 Phonebook</option>
+        </select>
       </div>
       
       <div class="button-group">
@@ -28,6 +37,7 @@
         <button id="retryBtn" disabled>🔄 Hang-up & Redial</button>
         <button id="settingsBtn">⚙️ Settings</button>
       </div>
+      
     </div>
     
     <!-- Status Section -->
@@ -64,6 +74,61 @@
     <div class="keypad-section">
       <h4>📱 Keypad</h4>
       <div id="pad"></div>
+      <div class="voice-commands">
+        <button id="sayAgentBtn" disabled>🗣️ Say "Agent"</button>
+      </div>
+    </div>
+    
+    <!-- Call History -->
+    <div class="history-section">
+      <div class="section-header">
+        <h4>📞 Recent Calls</h4>
+        <button id="clearHistory" class="clear-history-btn" title="Clear history">🗑️</button>
+      </div>
+      <div id="callHistory" class="call-history">
+        <div class="history-placeholder">No recent calls</div>
+      </div>
+    </div>
+    
+  </div>
+  
+  <!-- Right Panel: Transcripts and Debug Log -->
+  <div class="transcript-panel">
+    <div class="transcript-header">
+      <h3>🎙️ Recording Status</h3>
+      <div class="transcript-actions">
+        <button id="viewRecordings" title="View recordings">📼 Recordings</button>
+      </div>
+    </div>
+    <div id="recordingStatus" class="recording-status">
+      <div class="status-placeholder">
+        <span class="status-icon">⭕</span>
+        <span class="status-text">Ready to record</span>
+      </div>
+    </div>
+    
+    <!-- Recordings List -->
+    <div id="recordingsList" class="recordings-list" style="display: none;">
+      <div class="recordings-header">
+        <h4>📼 Call Recordings</h4>
+        <button id="closeRecordings" class="close-btn">✕</button>
+      </div>
+      <div id="recordingsContent" class="recordings-content">
+        <div class="recordings-placeholder">No recordings yet</div>
+      </div>
+    </div>
+    
+    <!-- Call Notes -->
+    <div class="notes-section">
+      <div class="notes-header">
+        <h4>📝 Call Notes</h4>
+        <div class="notes-actions">
+          <button id="copyNotes" class="notes-btn" title="Copy notes">📋 Copy</button>
+          <button id="exportNotes" class="notes-btn" title="Export as .txt">💾 Export</button>
+          <button id="clearNotes" class="notes-btn" title="Clear notes">🗑️ Clear</button>
+        </div>
+      </div>
+      <textarea id="callNotes" class="notes-textarea" placeholder="Type your notes here..."></textarea>
     </div>
     
     <!-- Debug Log -->
@@ -73,20 +138,6 @@
         <button id="copyLogs" class="copy-logs-btn" title="Copy logs">📋</button>
       </div>
       <div id="logBox"></div>
-    </div>
-  </div>
-  
-  <!-- Right Panel: Transcripts -->
-  <div class="transcript-panel">
-    <div class="transcript-header">
-      <h3>📝 Call Transcript</h3>
-      <div class="transcript-actions">
-        <button id="copyTranscript" title="Copy transcript">📋 Copy</button>
-        <button id="clearTranscript" title="Clear transcript">🗑️ Clear</button>
-      </div>
-    </div>
-    <div id="transcriptions" class="transcript-content">
-      <div class="transcript-placeholder">Transcripts will appear here when a call is active...</div>
     </div>
   </div>
 </div>
@@ -115,6 +166,7 @@
           </select>
         </div>
         <button id="refreshDevices">🔄 Refresh Devices</button>
+        <button id="testMicrophone">🎤 Test Microphone</button>
       </div>
 
       <!-- Redial Settings -->
@@ -134,6 +186,72 @@
             <option value="14400000">4 hours</option>
             <option value="18000000">5 hours</option>
           </select>
+        </div>
+        <div class="device-group">
+          <label>
+            <input type="checkbox" id="autoHangupAgentsBusy" checked> 
+            <span style="font-weight: 600;">Auto-hangup when agents busy</span>
+          </label>
+          <div style="font-size: 0.9em; color: #999; margin-top: 5px; margin-left: 20px;">
+            Automatically hang up and redial when "all agents are busy" is detected
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert Sounds -->
+      <div class="settings-section">
+        <h4>🔔 Alert Sounds</h4>
+        <div class="alert-sounds-container">
+          <div class="device-group">
+            <label for="alertVolume">Volume Level:</label>
+            <select id="alertVolume">
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          
+          <div class="alert-sound-item">
+            <label>Human Agent Detected:</label>
+            <div class="sound-controls">
+              <select id="humanDetectedSound" class="alert-sound-select">
+                <option value="none">None</option>
+                <option value="beep">Beep</option>
+                <option value="chime">Chime</option>
+                <option value="bell">Bell</option>
+                <option value="doubleBeep">Double Beep</option>
+              </select>
+              <button class="test-sound-btn" data-event="humanDetected">🔊 Test</button>
+            </div>
+          </div>
+          
+          <div class="alert-sound-item">
+            <label>Call Connected:</label>
+            <div class="sound-controls">
+              <select id="callConnectedSound" class="alert-sound-select">
+                <option value="none">None</option>
+                <option value="beep">Beep</option>
+                <option value="chime">Chime</option>
+                <option value="bell">Bell</option>
+                <option value="doubleBeep">Double Beep</option>
+              </select>
+              <button class="test-sound-btn" data-event="callConnected">🔊 Test</button>
+            </div>
+          </div>
+          
+          <div class="alert-sound-item">
+            <label>Agents Busy:</label>
+            <div class="sound-controls">
+              <select id="agentsBusySound" class="alert-sound-select">
+                <option value="none">None</option>
+                <option value="beep">Beep</option>
+                <option value="chime">Chime</option>
+                <option value="bell">Bell</option>
+                <option value="doubleBeep">Double Beep</option>
+                <option value="error">Error</option>
+              </select>
+              <button class="test-sound-btn" data-event="agentsBusy">🔊 Test</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -155,6 +273,12 @@
       <!-- Business Hours Settings -->
       <div class="settings-section">
         <h4>🕐 Business Hours</h4>
+        <div class="device-group">
+          <label>
+            <input type="checkbox" id="disableBusinessHours"> 
+            <span style="color: #e74c3c; font-weight: 600;">Disable business hours enforcement</span>
+          </label>
+        </div>
         <div class="device-group">
           <label for="timezone">Time Zone:</label>
           <select id="timezone">
@@ -224,6 +348,7 @@
 
   const status=$('status'), padDiv=$('pad'), logBox=$('logBox');
   const callBtn=$('callBtn'), endBtn=$('endBtn'), retryBtn=$('retryBtn');
+  const sayAgentBtn=$('sayAgentBtn');
   const settingsBtn=$('settingsBtn'), phoneInp=$('phone');
   const speakerSelect=$('speakerSelect'), micSelect=$('micSelect');
   const refreshDevicesBtn=$('refreshDevices'), redialIntervalSelect=$('redialInterval');
@@ -231,23 +356,31 @@
   const phoneSelect=$('phone-select'), phonebookList=$('phonebook-list');
   const phonebookAddBtn=$('phonebook-add-btn'), phonebookName=$('phonebook-name');
   const phonebookNumber=$('phonebook-number'), copyLogsBtn=$('copyLogs');
+  const profileSelect=$('profile-select'), editProfilesBtn=$('editProfiles');
+  const helpBtn=$('helpBtn'), callHistory=$('callHistory'), clearHistoryBtn=$('clearHistory');
+  const testMicBtn=$('testMicrophone');
+  const autoHangupCheckbox=$('autoHangupAgentsBusy');
   
   // Enhanced UI elements
   const callInfo=$('callInfo'), statusTitle=$('statusTitle');
   const callTimer=$('callTimer'), dmvStatusValue=$('dmvStatusValue');
-  const humanStatusValue=$('humanStatusValue'), transcriptions=$('transcriptions');
-  const copyTranscriptBtn=$('copyTranscript'), clearTranscriptBtn=$('clearTranscript');
+  const humanStatusValue=$('humanStatusValue');
   const redialTimer=$('redialTimer'), redialCountdown=$('redialCountdown');
+  const callNotesTextarea=$('callNotes'), copyNotesBtn=$('copyNotes');
+  const exportNotesBtn=$('exportNotes'), clearNotesBtn=$('clearNotes');
 
   /* State */
   let activeConn=null, currentSid=null, lastNumber=null;
   let redialDelay=60000, redialTimerId=null, redialCount=0;
   let deviceReady=false;
   let tokenRefreshTimer=null;
+  let isInitializingDevice=false;  // Prevent re-initialization loops
   let callStateInterval=null;
   let callStartTime=null;
   let callTimerInterval=null;
   let redialCountdownInterval=null;
+  let currentProfile=null;
+  let profiles=[];
 
   /* Audio Context Management */
   let audioContext = null;
@@ -259,6 +392,306 @@
       return audioContext.resume();
     }
     return Promise.resolve();
+  };
+
+  /* Sound Manager for Alerts */
+  class SoundManager {
+    constructor() {
+      this.sounds = {
+        beep: { frequency: 800, duration: 200, type: 'sine' },
+        chime: { frequencies: [523, 659, 784], duration: 150, type: 'sine' },
+        bell: { frequency: 440, duration: 300, type: 'triangle' },
+        doubleBeep: { frequencies: [600, 800], duration: 150, type: 'sine' },
+        error: { frequency: 200, duration: 400, type: 'sawtooth' }
+      };
+      
+      this.volumes = {
+        normal: 0.3,
+        low: 0.1
+      };
+      
+      // Load saved preferences
+      const savedPrefs = localStorage.getItem('dialbot-alert-sounds');
+      if (savedPrefs) {
+        this.preferences = JSON.parse(savedPrefs);
+      } else {
+        this.preferences = {
+          humanDetected: 'chime',
+          callConnected: 'beep',
+          agentsBusy: 'doubleBeep',
+          error: 'error',
+          volume: 'normal'
+        };
+      }
+    }
+    
+    async playAlert(eventType) {
+      const soundType = this.preferences[eventType] || 'beep';
+      const volume = this.volumes[this.preferences.volume || 'normal'];
+      
+      if (soundType === 'none') return;
+      
+      await initAudioContext();
+      const sound = this.sounds[soundType];
+      
+      if (sound.frequencies) {
+        // Play multiple frequencies in sequence
+        for (let i = 0; i < sound.frequencies.length; i++) {
+          setTimeout(() => {
+            this.playTone(sound.frequencies[i], sound.duration, sound.type, volume);
+          }, i * sound.duration);
+        }
+      } else {
+        // Play single frequency
+        this.playTone(sound.frequency, sound.duration, sound.type, volume);
+      }
+    }
+    
+    playTone(frequency, duration, type, volume) {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = frequency;
+      oscillator.type = type;
+      gainNode.gain.value = volume;
+      
+      // Fade out to prevent clicking
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration / 1000);
+      
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + duration / 1000);
+    }
+    
+    testSound(soundType) {
+      const volume = this.volumes[this.preferences.volume || 'normal'];
+      const sound = this.sounds[soundType];
+      
+      if (!sound) return;
+      
+      initAudioContext().then(() => {
+        if (sound.frequencies) {
+          for (let i = 0; i < sound.frequencies.length; i++) {
+            setTimeout(() => {
+              this.playTone(sound.frequencies[i], sound.duration, sound.type, volume);
+            }, i * sound.duration);
+          }
+        } else {
+          this.playTone(sound.frequency, sound.duration, sound.type, volume);
+        }
+      });
+    }
+    
+    savePreferences() {
+      localStorage.setItem('dialbot-alert-sounds', JSON.stringify(this.preferences));
+    }
+  }
+  
+  const soundManager = new SoundManager();
+
+  /* Profile Management */
+  const loadProfiles = async () => {
+    try {
+      const response = await fetch('/api/profiles');
+      profiles = await response.json();
+      
+      profileSelect.innerHTML = '<option value="">No Profile - Manual Mode</option>';
+      
+      profiles.forEach(profile => {
+        const option = document.createElement('option');
+        option.value = profile.id;
+        option.textContent = `${profile.icon} ${profile.name}`;
+        profileSelect.appendChild(option);
+      });
+      
+      // Check for saved profile preference
+      const savedProfileId = localStorage.getItem('dialbot-selected-profile');
+      if (savedProfileId && profiles.find(p => p.id === savedProfileId)) {
+        profileSelect.value = savedProfileId;
+        await loadProfile(savedProfileId);
+      }
+      
+      log('Profiles loaded successfully');
+    } catch (err) {
+      console.error('Failed to load profiles:', err);
+      log('Failed to load profiles');
+    }
+  };
+  
+  const loadProfile = async (profileId) => {
+    if (!profileId) {
+      currentProfile = null;
+      log('No profile selected - manual mode');
+      return;
+    }
+    
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return;
+    
+    currentProfile = profile;
+    localStorage.setItem('dialbot-selected-profile', profileId);
+    
+    // Update business hours from profile
+    if (profile.businessHours) {
+      const hours = profile.businessHours;
+      if (hours.timezone) $('timezone').value = hours.timezone;
+      
+      ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
+        if (hours[day]) {
+          $(day).checked = hours[day].enabled;
+          $(`${day}-start`).value = hours[day].start;
+          $(`${day}-end`).value = hours[day].end;
+          $(`${day}-start`).disabled = !hours[day].enabled;
+          $(`${day}-end`).disabled = !hours[day].enabled;
+        }
+      });
+    }
+    
+    // Update redial settings from profile
+    if (profile.redialSettings) {
+      const redialMs = (profile.redialSettings.delaySeconds || 60) * 1000;
+      redialDelay = redialMs;
+      redialIntervalSelect.value = redialMs.toString();
+    }
+    
+    // Update phonebook from profile
+    if (profile.numbers && profile.numbers.length > 0) {
+      // Add profile numbers to phonebook UI
+      profile.numbers.forEach(num => {
+        phoneSelect.innerHTML += `<option value="${num.number}">${profile.icon} ${num.name} (${num.number})</option>`;
+      });
+    }
+    
+    log(`Profile loaded: ${profile.name}`);
+    status.textContent = `${profile.icon} ${profile.name} profile active`;
+  };
+  
+  // Profile select handler
+  profileSelect.onchange = () => {
+    loadProfile(profileSelect.value);
+  };
+  
+  // Edit profiles handler (placeholder for now)
+  editProfilesBtn.onclick = () => {
+    alert('Profile editor coming soon! For now, edit the JSON files in public/profiles/');
+  };
+  
+  // Help button handler
+  helpBtn.onclick = () => {
+    const helpModal = document.createElement('div');
+    helpModal.className = 'modal';
+    helpModal.style.display = 'block';
+    helpModal.innerHTML = `
+      <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+          <h3>📚 DialBot Help & Documentation</h3>
+          <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+        </div>
+        <div class="modal-body" style="padding: 2rem;">
+          <div class="help-section">
+            <h4 style="color: #00d9ff; margin-bottom: 1rem;">🚀 Getting Started</h4>
+            <ol style="line-height: 1.8; color: #e0e0e0;">
+              <li><strong>Select a Profile:</strong> Choose a pre-configured profile (DMV, Healthcare, etc.) or use Manual Mode</li>
+              <li><strong>Enter Phone Number:</strong> Type the number or select from your phonebook</li>
+              <li><strong>Start Call:</strong> Click the call button to begin dialing</li>
+              <li><strong>Automatic Navigation:</strong> DialBot will listen and respond to IVR prompts based on the profile</li>
+              <li><strong>Human Detection:</strong> When a human agent is detected, you'll be connected automatically</li>
+            </ol>
+          </div>
+          
+          <div class="help-section" style="margin-top: 2rem;">
+            <h4 style="color: #00d9ff; margin-bottom: 1rem;">📋 Profile Features</h4>
+            <ul style="line-height: 1.8; color: #e0e0e0;">
+              <li><strong>DMV Profiles:</strong> Automatically say "Agent" to navigate to human representatives</li>
+              <li><strong>Healthcare:</strong> Navigate appointment menus and pharmacy options</li>
+              <li><strong>Utilities:</strong> Handle billing, outage reports, and service requests</li>
+              <li><strong>Custom:</strong> Create your own patterns in the profiles/*.json files</li>
+            </ul>
+          </div>
+          
+          <div class="help-section" style="margin-top: 2rem;">
+            <h4 style="color: #00d9ff; margin-bottom: 1rem;">⚙️ Key Features</h4>
+            <ul style="line-height: 1.8; color: #e0e0e0;">
+              <li><strong>Immediate Audio:</strong> Hear the call as soon as it's answered - no waiting</li>
+              <li><strong>Manual Commands:</strong> Say "Agent" with button click</li>
+              <li><strong>Pattern Detection:</strong> Automatic detection of "agents busy" and other patterns</li>
+              <li><strong>Auto-Redial:</strong> Automatically redial when all agents are busy</li>
+              <li><strong>Business Hours:</strong> Only dial during configured hours</li>
+              <li><strong>Call Recording:</strong> Records conversations with human agents</li>
+              <li><strong>Real-time Transcripts:</strong> See what's being said in real-time</li>
+              <li><strong>Call History:</strong> Track your recent calls and outcomes</li>
+            </ul>
+          </div>
+          
+          <div class="help-section" style="margin-top: 2rem; padding: 1rem; background: rgba(0, 217, 255, 0.1); border-radius: 8px;">
+            <p style="color: #00d9ff; margin: 0;">
+              <strong>💡 Tip:</strong> Configure audio devices in Settings before making your first call!
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(helpModal);
+    
+    // Close on background click
+    helpModal.onclick = (e) => {
+      if (e.target === helpModal) helpModal.remove();
+    };
+  };
+  
+  // Call history management
+  const addToCallHistory = (number, duration, status) => {
+    const history = JSON.parse(localStorage.getItem('dialbot-call-history') || '[]');
+    history.unshift({
+      number,
+      duration,
+      status,
+      timestamp: new Date().toISOString(),
+      profile: currentProfile ? currentProfile.name : 'Manual'
+    });
+    
+    // Keep only last 10 calls
+    if (history.length > 10) history.pop();
+    
+    localStorage.setItem('dialbot-call-history', JSON.stringify(history));
+    updateCallHistoryUI();
+  };
+  
+  const updateCallHistoryUI = () => {
+    const history = JSON.parse(localStorage.getItem('dialbot-call-history') || '[]');
+    
+    if (history.length === 0) {
+      callHistory.innerHTML = '<div class="history-placeholder">No recent calls</div>';
+      return;
+    }
+    
+    callHistory.innerHTML = history.map(call => {
+      const date = new Date(call.timestamp);
+      const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const dateStr = date.toLocaleDateString();
+      
+      return `
+        <div class="history-item">
+          <div class="history-number">${call.number}</div>
+          <div class="history-details">
+            <span class="history-profile">${call.profile}</span>
+            <span class="history-duration">${formatTime(call.duration)}</span>
+            <span class="history-status">${call.status}</span>
+          </div>
+          <div class="history-time">${timeStr} ${dateStr}</div>
+        </div>
+      `;
+    }).join('');
+  };
+  
+  clearHistoryBtn.onclick = () => {
+    if (confirm('Clear all call history?')) {
+      localStorage.removeItem('dialbot-call-history');
+      updateCallHistoryUI();
+      log('Call history cleared');
+    }
   };
 
   /* Token Refresh */
@@ -281,6 +714,12 @@
 
   /* Business Hours Check */
   const isWithinBusinessHours = () => {
+    // Check if business hours are disabled
+    const disabled = localStorage.getItem('dialbot-disable-business-hours');
+    if (disabled === 'true') {
+      return true; // Allow calls anytime
+    }
+    
     const saved = localStorage.getItem('dialbot-business-hours');
     if (!saved) return true; // Default to allow if not configured
     
@@ -302,15 +741,32 @@
 
   /* Call State Monitoring */
   const updateCallState = async () => {
-    if (!currentSid) return;
+    if (!currentSid) {
+      log('updateCallState: No currentSid, skipping');
+      return;
+    }
     
     try {
-      const state = await fetch(`/call-state/${currentSid}`).then(r=>r.json());
+      const stateResponse = await fetch(`/call-state/${currentSid}`);
+      if (!stateResponse.ok) {
+        log(`Call state fetch failed: ${stateResponse.status}`);
+        return;
+      }
+      const state = await stateResponse.json();
+      
+      // Store the last call state for disconnect handling
+      window.lastCallState = state;
+      
+      // Log state changes
+      if (state.status !== window.lastCallStatus) {
+        log(`📞 Call state changed: ${window.lastCallStatus || 'none'} → ${state.status}`);
+        window.lastCallStatus = state.status;
+      }
       
       // Update UI based on state
       if (state.status === 'dialing') {
         dmvStatusValue.textContent = 'Dialing...';
-        statusTitle.textContent = '📞 Calling DMV...';
+        statusTitle.textContent = `📞 Calling ${state.profile ? state.profile.name : 'DMV'}...`;
       } else if (state.status === 'listening') {
         dmvStatusValue.textContent = 'Listening...';
         statusTitle.textContent = '👂 Listening for response...';
@@ -318,26 +774,38 @@
         dmvStatusValue.textContent = 'All agents busy';
         statusTitle.textContent = '⏸️ Agents Busy - Will Redial';
         
-        // Store redial flag and prepare for disconnect
+        // Play agents busy sound
+        soundManager.playAlert('agentsBusy');
+        
+        // Check if auto-hangup is enabled
+        const autoHangupEnabled = localStorage.getItem('dialbot-auto-hangup') !== 'false';
+        
         if (state.shouldRedial) {
-          sessionStorage.setItem('dialbot-should-redial', 'true');
-          log('Agents busy detected - preparing for redial');
-          
-          // Stop monitoring and schedule redial
-          if (callStateInterval) {
-            clearInterval(callStateInterval);
-            callStateInterval = null;
+          if (autoHangupEnabled) {
+            log('⚠️ Agents busy detected - Auto-hanging up in 3 seconds...');
+            // Add system message to transcript
+            // Update status to show agents busy
+            dmvStatusValue.textContent = 'Agents busy - auto-hanging up...';
+            
+            // Auto-hangup after 3 seconds
+            setTimeout(async () => {
+              log('🔴 Auto-hanging up due to agents busy');
+              await endCurrentCall();
+              scheduleRedial();
+            }, 3000);
+          } else {
+            log('⚠️ Agents busy detected - Will redial after you hang up');
+            // Add system message to transcript
+            // Update status to show agents busy
+            dmvStatusValue.textContent = 'Agents busy - will redial after hang up';
           }
-          
-          // Schedule redial immediately since server will hang up
-          setTimeout(() => {
-            log('Call ended due to agents busy - scheduling redial');
-            scheduleRedial();
-          }, 1000);
         }
       } else if (state.status === 'ivr_detected') {
         dmvStatusValue.textContent = 'IVR System Detected';
-        statusTitle.textContent = '🤖 Navigating DMV Menu...';
+        statusTitle.textContent = `🤖 Navigating ${state.profile ? state.profile.name : 'DMV'} Menu...`;
+      } else if (state.status === 'listening') {
+        dmvStatusValue.textContent = 'Listening for menu...';
+        statusTitle.textContent = '👂 Waiting for menu options...';
       } else if (state.status === 'human_detected') {
         dmvStatusValue.textContent = 'Connected';
         humanStatusValue.textContent = '✅ Human Detected!';
@@ -351,7 +819,13 @@
         statusTitle.textContent = '⏳ Waiting for Agent...';
       } else if (state.status === 'connected') {
         dmvStatusValue.textContent = 'Connected';
-        statusTitle.textContent = '📞 Connected to Browser';
+        statusTitle.textContent = '📞 Connected - Listening';
+        humanStatusValue.textContent = state.humanDetected ? '✅ Human Detected!' : 'Waiting for agent...';
+        
+        // Enable controls now that we're connected
+        if (true) {
+          sayAgentBtn.disabled = false;
+        }
       }
       
       // Update human detection status
@@ -359,83 +833,38 @@
         humanStatusValue.textContent = '✅ Human Detected!';
       }
       
-      // Update transcriptions with smart consolidation
-      if (state.transcriptions && state.transcriptions.length > 0) {
-        // Remove placeholder if exists
-        const placeholder = transcriptions.querySelector('.transcript-placeholder');
-        if (placeholder) placeholder.remove();
-        
-        // Process transcriptions to consolidate partial results
-        const consolidated = [];
-        let lastStableText = '';
-        let lastTime = null;
-        
-        state.transcriptions.forEach((t, index) => {
-          // Always show system messages
-          if (t.type === 'system') {
-            consolidated.push(t);
-            return;
-          }
-          
-          const currentText = t.text.toLowerCase().trim();
-          
-          // If this is a stable result, use it as the new baseline
-          if (t.type === 'stable') {
-            lastStableText = currentText;
-            consolidated.push(t);
-            lastTime = t.timestamp;
-          } else {
-            // For unstable results, only show if significantly different from last stable
-            // or if it's been more than 2 seconds since last shown transcript
-            const timeDiff = lastTime ? new Date(t.timestamp) - new Date(lastTime) : 1000;
-            const isSubstring = lastStableText.includes(currentText) || currentText.includes(lastStableText);
-            
-            if (!isSubstring || timeDiff > 2000) {
-              consolidated.push(t);
-              lastTime = t.timestamp;
-            }
-          }
-        });
-        
-        // Clear and rebuild with consolidated transcriptions
-        transcriptions.innerHTML = '';
-        consolidated.forEach(t => {
-          const div = document.createElement('div');
-          div.className = 'transcription-item';
-          const timeStr = new Date(t.timestamp).toLocaleTimeString();
-          
-          if (t.type === 'system') {
-            div.className += ' system-message';
-            div.innerHTML = `<span class="time">${timeStr}</span> <span class="system">${t.text}</span>`;
-          } else {
-            const typeClass = t.type === 'stable' ? 'stable' : 'unstable';
-            div.innerHTML = `<span class="time">${timeStr}</span> <span class="${typeClass}">${t.text}</span>`;
-          }
-          
-          transcriptions.appendChild(div);
-        });
-        transcriptions.scrollTop = transcriptions.scrollHeight;
+      // Update recording status
+      if (state.recordingStatus) {
+        updateRecordingStatus(state.recordingStatus);
       }
+      
+      // Store recordings for display
+      if (state.recordings && state.recordings.length > 0) {
+        window.callRecordings = state.recordings;
+      }
+      
+      // No longer handling transcriptions - using recording status instead
     } catch (err) {
       console.error('Failed to fetch call state:', err);
     }
   };
 
+  /* Client-side Pattern Detection */
+  const startPatternDetection = () => {
+    // Pattern detection is now handled server-side only
+    log('✅ Server-side pattern detection active');
+  };
+  
+  const stopPatternDetection = () => {
+    // Pattern detection is handled server-side, nothing to stop
+    log('ℹ️ Server-side pattern detection continues via Twilio');
+  };
+  
+  
   /* Human Detection Alert */
   const playHumanDetectedAlert = () => {
-    // Create a simple beep sound
-    const context = new AudioContext();
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(context.destination);
-    
-    oscillator.frequency.value = 800;
-    gainNode.gain.value = 0.3;
-    
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.2);
+    // Play sound using sound manager
+    soundManager.playAlert('humanDetected');
     
     // Also show browser notification if permitted
     if (Notification.permission === 'granted') {
@@ -443,6 +872,46 @@
         body: 'A human agent is now on the line!',
         icon: '☎️'
       });
+    }
+  };
+  
+  /* Update Recording Status */
+  const updateRecordingStatus = (status) => {
+    const recordingStatus = document.getElementById('recordingStatus');
+    if (!recordingStatus) return;
+    
+    if (status === 'recording') {
+      recordingStatus.classList.add('recording');
+      recordingStatus.innerHTML = `
+        <div class="status-placeholder">
+          <span class="status-icon">🔴</span>
+          <span class="status-text">Recording in progress...</span>
+        </div>
+      `;
+    } else if (status === 'completed') {
+      recordingStatus.classList.remove('recording');
+      recordingStatus.innerHTML = `
+        <div class="status-placeholder">
+          <span class="status-icon">✅</span>
+          <span class="status-text">Recording saved</span>
+        </div>
+      `;
+    } else if (status === 'failed') {
+      recordingStatus.classList.remove('recording');
+      recordingStatus.innerHTML = `
+        <div class="status-placeholder">
+          <span class="status-icon">❌</span>
+          <span class="status-text">Recording failed</span>
+        </div>
+      `;
+    } else {
+      recordingStatus.classList.remove('recording');
+      recordingStatus.innerHTML = `
+        <div class="status-placeholder">
+          <span class="status-icon">⭕</span>
+          <span class="status-text">Ready to record</span>
+        </div>
+      `;
     }
   };
 
@@ -541,10 +1010,24 @@
   const loadSettings = () => {
     const savedRedialDelay = localStorage.getItem('dialbot-redial-delay');
     const savedBusinessHours = localStorage.getItem('dialbot-business-hours');
+    const disableBusinessHours = localStorage.getItem('dialbot-disable-business-hours');
     
     if (savedRedialDelay) {
       redialDelay = parseInt(savedRedialDelay);
       redialIntervalSelect.value = savedRedialDelay;
+    }
+    
+    // Load business hours disabled state
+    if (disableBusinessHours === 'true') {
+      $('disableBusinessHours').checked = true;
+    }
+    
+    // Load auto-hangup setting (default to true)
+    const autoHangup = localStorage.getItem('dialbot-auto-hangup');
+    if (autoHangup === 'false') {
+      autoHangupCheckbox.checked = false;
+    } else {
+      autoHangupCheckbox.checked = true; // Default to checked
     }
     
     // Load business hours
@@ -563,6 +1046,14 @@
       } catch (e) {
         console.error('Failed to load business hours:', e);
       }
+    }
+    
+    // Load alert sound preferences
+    if (soundManager.preferences) {
+      $('alertVolume').value = soundManager.preferences.volume || 'normal';
+      $('humanDetectedSound').value = soundManager.preferences.humanDetected || 'chime';
+      $('callConnectedSound').value = soundManager.preferences.callConnected || 'beep';
+      $('agentsBusySound').value = soundManager.preferences.agentsBusy || 'doubleBeep';
     }
   };
 
@@ -591,9 +1082,28 @@
     };
     localStorage.setItem('dialbot-business-hours', JSON.stringify(businessHours));
     
+    // Save business hours disabled state
+    localStorage.setItem('dialbot-disable-business-hours', $('disableBusinessHours').checked.toString());
+    
+    // Save auto-hangup setting
+    localStorage.setItem('dialbot-auto-hangup', autoHangupCheckbox.checked.toString());
+    
+    // Save alert sound preferences
+    soundManager.preferences.volume = $('alertVolume').value;
+    soundManager.preferences.humanDetected = $('humanDetectedSound').value;
+    soundManager.preferences.callConnected = $('callConnectedSound').value;
+    soundManager.preferences.agentsBusy = $('agentsBusySound').value;
+    soundManager.savePreferences();
+    
     log(`Settings saved - Redial: ${formatTime(redialDelay)}`);
     updateAudioDevices();
     settingsModal.style.display = 'none';
+    
+    // Update status to reflect business hours setting
+    const businessHoursDisabled = $('disableBusinessHours').checked;
+    if (deviceReady && speakerSelect.value && micSelect.value) {
+      status.textContent = businessHoursDisabled ? '✅ Ready to dial 🚫 (Hours disabled)' : '✅ Ready to dial';
+    }
   };
 
   /* Modal handlers */
@@ -613,6 +1123,16 @@
   };
 
   saveSettingsBtn.onclick = saveSettings;
+  
+  /* Alert Sound Test Handlers */
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('test-sound-btn')) {
+      const soundType = e.target.parentElement.querySelector('select').value;
+      if (soundType !== 'none') {
+        soundManager.testSound(soundType);
+      }
+    }
+  });
   
   /* Business Hours Checkbox Handlers */
   ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
@@ -655,7 +1175,66 @@
   redialIntervalSelect.value = redialDelay.toString();
 
   /* 2️⃣  Twilio Device Setup */
-  Twilio.Device.setup(token, {debug: false});
+  // Function to reinitialize Twilio Device with correct microphone
+  const initializeTwilioDevice = async (token, forceMicId = null) => {
+    const micId = forceMicId || localStorage.getItem('dialbot-mic');
+    const micLabel = localStorage.getItem('dialbot-mic-label');
+    
+    // CRITICAL: Pre-activate the microphone to ensure browser uses it
+    if (micId && micId !== '') {
+      try {
+        log('Pre-activating microphone to ensure browser selection...');
+        const testStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: micId }
+          }
+        });
+        
+        // Verify we got the right device
+        const tracks = testStream.getAudioTracks();
+        if (tracks.length > 0) {
+          const settings = tracks[0].getSettings();
+          log(`Pre-activated mic: ${tracks[0].label}, ID: ${settings.deviceId}`);
+        }
+        
+        // Keep the stream active for a moment to ensure browser remembers the selection
+        setTimeout(() => {
+          testStream.getTracks().forEach(track => track.stop());
+        }, 500);
+      } catch (err) {
+        log(`Failed to pre-activate microphone: ${err.message}`);
+      }
+    }
+    
+    const setupOptions = {
+      debug: false,
+      closeProtection: false,
+      enableRingingState: true,
+      // Add edge location for better audio quality
+      edge: 'ashburn'
+    };
+    
+    // If we have a saved mic, add rtcConstraints for Twilio v1.x
+    if (micId && micId !== '') {
+      // Use ideal instead of exact for better compatibility
+      setupOptions.rtcConstraints = {
+        audio: {
+          deviceId: { ideal: micId },
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
+        video: false
+      };
+      log(`Initializing Twilio Device with microphone: ${micLabel || micId}`);
+    }
+    
+    isInitializingDevice = true;
+    Twilio.Device.setup(token, setupOptions);
+  };
+  
+  // Initial setup
+  initializeTwilioDevice(token);
   
   // Enable audio (remove the previous disabling lines)
   // Audio devices will be set when user selects them
@@ -663,14 +1242,29 @@
 
   Twilio.Device.on('ready', async ()=>{
     deviceReady = true;
+    isInitializingDevice = false;
     status.classList.remove('loading');
     log('Device ready');
+    
+    // Debug: Check available Twilio Device audio APIs
+    if (Twilio.Device.audio) {
+      log(`Twilio audio APIs available: ${Object.keys(Twilio.Device.audio).join(', ')}`);
+      if (Twilio.Device.audio.inputDevice) {
+        log('Input device API is available');
+      }
+    }
     
     // Start by populating devices (this will also restore saved devices)
     await populateDevices();
     
+    // Load profiles
+    await loadProfiles();
+    
     // Load other settings
     loadSettings();
+    
+    // Load call history
+    updateCallHistoryUI();
     
     // Start token refresh timer
     startTokenRefresh();
@@ -687,50 +1281,153 @@
     log(`Device error: ${e.message}`);
   });
   
-  Twilio.Device.on('incoming', conn=>{
-    conn.accept();
-    activeConn=conn; endBtn.disabled=false; retryBtn.disabled=false; enablePad(true);
-    status.textContent='🔊 Connected – speak now!';
-    log('Call connected');
+  
+  Twilio.Device.on('incoming', async conn=>{
+    // This is the critical moment - we're receiving the browser connection from Twilio
+    const savedMicId = localStorage.getItem('dialbot-mic');
+    const savedMicLabel = localStorage.getItem('dialbot-mic-label');
+    
+    log(`📞 Incoming connection from Twilio - Need to connect microphone: ${savedMicLabel || 'default'}`);
+    
+    
+    
+    // IMPORTANT: For Twilio v1.x, we need to pass parameters when accepting
+    const acceptOptions = {};
+    
+    // Try to set constraints during accept
+    if (savedMicId && savedMicId !== '') {
+      acceptOptions.rtcConstraints = {
+        audio: {
+          deviceId: { exact: savedMicId }
+        },
+        video: false
+      };
+      log(`Accepting with rtcConstraints for mic: ${savedMicId}`);
+    }
+    
+    // Accept the connection with constraints
+    conn.accept(acceptOptions);
+    activeConn=conn; 
+    endBtn.disabled=false; 
+    retryBtn.disabled=false; 
+    sayAgentBtn.disabled=false;
+    enablePad(true);
+    status.textContent='🔊 Connected to call';
+    
+    // Update UI immediately since we're connecting right away
+    statusTitle.textContent = '📞 Connected - Listening';
+    dmvStatusValue.textContent = 'Connected';
+    humanStatusValue.textContent = 'Detecting speaker...';
+    
+    // Update recording status to show we're connected
+    updateRecordingStatus('none');
+    
+    // Play call connected sound
+    soundManager.playAlert('callConnected');
+    
+    // Show that audio is connected
+    log('🔊 Audio connected - you can hear the call');
+    
+    
+    
+    // Start client-side speech recognition for pattern detection
+    startPatternDetection();
+    
+    // Verify what actually happened
+    setTimeout(() => {
+      if (activeConn && activeConn.mediaStream) {
+        const audioTracks = activeConn.mediaStream.getAudioTracks();
+        log(`Active audio tracks: ${audioTracks.length}`);
+        if (audioTracks.length > 0) {
+          const track = audioTracks[0];
+          const settings = track.getSettings();
+          log(`✅ Connected with mic: ${track.label || 'Unknown'}, ID: ${settings.deviceId || 'Unknown'}`);
+          
+          // Check if it's the right device
+          if (savedMicId && settings.deviceId !== savedMicId) {
+            log(`⚠️ Warning: Connected with different mic than selected!`);
+            log(`   Selected: ${savedMicId}`);
+            log(`   Active: ${settings.deviceId}`);
+          }
+        }
+      } else {
+        log('⚠️ Warning: No media stream available on connection');
+      }
+    }, 500);
+    
     conn.on('disconnect', ()=>{ 
-      log('Call disconnected'); 
+      log('Call disconnected');
+      
+      // Add to call history
+      if (callStartTime) {
+        const duration = Date.now() - callStartTime;
+        const status = humanStatusValue.textContent.includes('Human Detected') ? 'Connected' : 'No Agent';
+        addToCallHistory(lastNumber, duration, status);
+      }
       
       // Check if we should redial from multiple sources
       const shouldRedialStorage = sessionStorage.getItem('dialbot-should-redial');
-      const agentsBusyUI = dmvStatusValue.textContent === 'All agents busy';
+      const callState = window.lastCallState; // Use the last known call state
       
-      if (shouldRedialStorage === 'true' || agentsBusyUI) {
+      if (shouldRedialStorage === 'true' || (callState && callState.shouldRedial)) {
         sessionStorage.removeItem('dialbot-should-redial');
-        log('Agents were busy - scheduling redial');
+        log('📞 Call disconnected - Agents were busy, scheduling redial');
+        log(`Redial flag from storage: ${shouldRedialStorage}`);
+        log(`Redial flag from call state: ${callState?.shouldRedial}`);
         scheduleRedial();
       } else {
+        log('📞 Call disconnected - Normal end, resetting UI');
         resetUI();
       }
+      
+      // Stop pattern detection
+      stopPatternDetection();
     });
   });
 
   /* Audio Device Selection Handlers */
   const updateAudioDevices = async () => {
-    if (!deviceReady) return;
+    if (!deviceReady || isInitializingDevice) return;
     
     const speakerId = speakerSelect.value;
     const micId = micSelect.value;
     
     try {
-      // Set audio devices if selected
+      // Set speaker device
       if (speakerId) {
-        // Only set speaker devices, Twilio.Device handles mic internally
         await Twilio.Device.audio.speakerDevices.set([speakerId]);
         log(`Speaker set: ${speakerSelect.selectedOptions[0]?.text}`);
       }
       
-      // Note: Microphone is set via Twilio Device setup, not here
-      // The ringtoneDevices API might be causing the error
+      // For microphone changes, we need to reinitialize Twilio Device
+      if (micId) {
+        const micLabel = micSelect.selectedOptions[0]?.text;
+        log(`Microphone selected: ${micLabel}`);
+        
+        // Check if we need to reinitialize (mic changed)
+        const currentMicId = localStorage.getItem('dialbot-mic');
+        if (currentMicId !== micId && !activeConn) {
+          log('Microphone changed - reinitializing Twilio Device...');
+          
+          // Destroy current device
+          Twilio.Device.destroy();
+          deviceReady = false;
+          
+          // Get a fresh token and reinitialize
+          try {
+            const { token } = await fetch('/token').then(r=>r.json());
+            initializeTwilioDevice(token, micId);
+          } catch (err) {
+            log(`Failed to reinitialize: ${err.message}`);
+          }
+        }
+      }
       
       // Enable call button if both devices are selected
       if (speakerId && micId) {
         callBtn.disabled = false;
-        status.textContent = '✅ Ready to dial';
+        const businessHoursDisabled = localStorage.getItem('dialbot-disable-business-hours') === 'true';
+        status.textContent = businessHoursDisabled ? '✅ Ready to dial 🚫 (Hours disabled)' : '✅ Ready to dial';
       }
     } catch (err) {
       // Check if it's the specific device not found error
@@ -747,6 +1444,77 @@
   speakerSelect.onchange = updateAudioDevices;
   micSelect.onchange = updateAudioDevices;
   refreshDevicesBtn.onclick = populateDevices;
+  
+  /* Microphone Test */
+  testMicBtn.onclick = async () => {
+    const micId = micSelect.value;
+    if (!micId) {
+      alert('Please select a microphone first');
+      return;
+    }
+    
+    try {
+      log('Starting microphone test...');
+      
+      // Get a stream with the specific microphone
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: { exact: micId }
+        }
+      });
+      
+      // Get the actual device being used
+      const tracks = stream.getAudioTracks();
+      if (tracks.length > 0) {
+        const settings = tracks[0].getSettings();
+        log(`Mic test - Using: ${tracks[0].label}, ID: ${settings.deviceId}`);
+        
+        // Create audio context to visualize audio level
+        const audioContext = new AudioContext();
+        const analyser = audioContext.createAnalyser();
+        const microphone = audioContext.createMediaStreamSource(stream);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        microphone.connect(analyser);
+        
+        // Monitor audio levels for 3 seconds
+        let maxLevel = 0;
+        const checkLevel = () => {
+          analyser.getByteFrequencyData(dataArray);
+          const level = Math.max(...dataArray);
+          if (level > maxLevel) maxLevel = level;
+        };
+        
+        const interval = setInterval(checkLevel, 100);
+        
+        // Show test status
+        testMicBtn.textContent = '🔴 Testing... Speak now!';
+        testMicBtn.disabled = true;
+        
+        setTimeout(() => {
+          clearInterval(interval);
+          stream.getTracks().forEach(track => track.stop());
+          audioContext.close();
+          
+          testMicBtn.textContent = '🎤 Test Microphone';
+          testMicBtn.disabled = false;
+          
+          if (maxLevel > 10) {
+            log(`Mic test successful! Max level: ${maxLevel}`);
+            alert('Microphone is working! Audio detected.');
+          } else {
+            log(`Mic test - No audio detected. Max level: ${maxLevel}`);
+            alert('No audio detected. Please check:\n1. Microphone is not muted\n2. Correct device is selected\n3. Audio interface is properly connected');
+          }
+        }, 3000);
+      }
+    } catch (err) {
+      log(`Mic test error: ${err.message}`);
+      alert(`Microphone test failed: ${err.message}`);
+      testMicBtn.textContent = '🎤 Test Microphone';
+      testMicBtn.disabled = false;
+    }
+  };
 
   /* 3️⃣  Keypad */
   "123456789*0#".split('').forEach(d=>{
@@ -764,7 +1532,15 @@
     if (!isWithinBusinessHours()) {
       status.textContent = '🕐 DMV is closed';
       log('Cannot call - outside business hours');
-      return;
+      const disableOption = confirm('DMV is currently closed. Would you like to disable business hours enforcement and call anyway?');
+      if (disableOption) {
+        localStorage.setItem('dialbot-disable-business-hours', 'true');
+        $('disableBusinessHours').checked = true;
+        log('Business hours enforcement disabled');
+        // Proceed with the call
+      } else {
+        return;
+      }
     }
     
     // Initialize audio context on user gesture
@@ -775,7 +1551,10 @@
     }
     
     lastNumber=num; callBtn.disabled=true;
-    status.textContent='📞 Dialing…'; log(`Dial → ${num}`);
+    status.textContent='📞 Dialing…'; 
+    log(`=== STARTING CALL ===`);
+    log(`Dial → ${num}`);
+    log(`Is redial: ${redialCount > 0}`);
     
     // Clear any existing call state
     currentSid = null;
@@ -784,23 +1563,60 @@
     // Show call info
     callInfo.style.display = 'block';
     callInfo.classList.add('call-active');
-    statusTitle.textContent = '📞 Calling DMV...';
+    statusTitle.textContent = `📞 Calling ${currentProfile ? currentProfile.name : 'DMV'}...`;
     dmvStatusValue.textContent = 'Dialing...';
     humanStatusValue.textContent = 'Not detected';
-    transcriptions.innerHTML = '<div class="transcript-placeholder">Waiting for speech...</div>';
+    
+    // Update recording status to show we're ready to record
+    updateRecordingStatus('none');
     
     // Start call timer
     callStartTime = Date.now();
     callTimerInterval = setInterval(updateCallTimer, 1000);
     
-    const { callSid } = await fetch('/call',{
+    // For outbound calls, we need to explicitly set up the connection parameters
+    const savedMicId = localStorage.getItem('dialbot-mic');
+    const savedMicLabel = localStorage.getItem('dialbot-mic-label');
+    
+    // Log what we're about to use
+    log(`Preparing outbound call with mic: ${savedMicLabel || savedMicId || 'default'}`);
+    
+    // First, ensure Twilio Device is using the correct input device
+    // For Twilio Client v1.13, we need to reinitialize the device with the correct constraints
+    if (savedMicId) {
+      log('Note: Twilio Client v1.13 requires device reinitialization for mic changes');
+      // The microphone was already set during Device.setup with rtcConstraints
+      // Log the current audio input devices to verify
+      if (Twilio.Device.audio && Twilio.Device.audio.availableInputDevices) {
+        const inputDevices = Twilio.Device.audio.availableInputDevices;
+        log(`Available input devices: ${Object.keys(inputDevices).length}`);
+      }
+    }
+    
+    log('Sending POST /call request...');
+    const callResponse = await fetch('/call',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({phoneNumber:num})
-    }).then(r=>r.json());
+      body:JSON.stringify({
+        phoneNumber:num,
+        profileId: currentProfile ? currentProfile.id : null
+      })
+    });
+    
+    if (!callResponse.ok) {
+      const error = await callResponse.text();
+      log(`❌ Call creation failed: ${error}`);
+      status.textContent = '❌ Call failed';
+      callBtn.disabled = false;
+      return;
+    }
+    
+    const { callSid } = await callResponse.json();
     currentSid=callSid;
+    log(`✅ Call created: ${callSid}`);
     endBtn.disabled=false; retryBtn.disabled=false;
     
     // Start monitoring call state (faster polling to catch status changes)
+    log('Starting call state monitoring...');
     updateCallState(); // Call immediately
     callStateInterval = setInterval(updateCallState, 1000);
   }
@@ -835,8 +1651,18 @@
         redialCountdown.textContent = '00:00';
         redialTimer.style.display = 'none';
         redialCount++;
-        log(`⇪ Redial #${redialCount}`);
-        startCall(lastNumber);
+        log(`⇪ Redial #${redialCount} - Starting redial now`);
+        
+        // Add a small delay to ensure device is ready
+        setTimeout(() => {
+          if (deviceReady) {
+            log('Device ready, initiating redial call');
+            startCall(lastNumber);
+          } else {
+            log('⚠️ Device not ready for redial, aborting');
+            resetUI();
+          }
+        }, 500);
       } else {
         const seconds = Math.ceil(remaining / 1000);
         const minutes = Math.floor(seconds / 60);
@@ -885,6 +1711,10 @@
       callTimerInterval = null;
     }
     
+    sayAgentBtn.disabled = true;
+    
+    
+    
     // Reset call info but keep visible
     if (callInfo) {
       callInfo.classList.remove('call-active');
@@ -896,7 +1726,9 @@
       statusTitle.textContent = '📞 Ready';
       dmvStatusValue.textContent = '-';
       humanStatusValue.textContent = '-';
-      status.textContent = speakerSelect.value && micSelect.value ? '✅ Ready to dial' : '✅ Ready - Configure settings first';
+      const businessHoursDisabled = localStorage.getItem('dialbot-disable-business-hours') === 'true';
+      const baseStatus = speakerSelect.value && micSelect.value ? '✅ Ready to dial' : '✅ Ready - Configure settings first';
+      status.textContent = businessHoursDisabled ? `${baseStatus} 🚫 (Hours disabled)` : baseStatus;
     }
     
     callStartTime = null;
@@ -926,6 +1758,44 @@
     if(!activeConn && !currentSid) return;
     await endCurrentCall(); scheduleRedial();
   };
+  
+
+  
+  // Say Agent button handler
+  sayAgentBtn.onclick = async () => {
+    if (!currentSid || !activeConn) return;
+    
+    try {
+      sayAgentBtn.disabled = true;
+      sayAgentBtn.textContent = '⏳ Saying...';
+      
+      // Call the new say-agent endpoint
+      const response = await fetch(`/say-agent/${currentSid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to say Agent');
+      }
+      
+      const result = await response.json();
+      log('🗣️ Successfully said "Agent" into the call');
+      
+      // Log that we said "Agent"
+      log('🗣️ Said "Agent" (twice)');
+      
+      setTimeout(() => {
+        sayAgentBtn.disabled = false;
+        sayAgentBtn.textContent = '🗣️ Say "Agent"';
+      }, 3000); // Give it a bit more time for the audio to play
+    } catch (err) {
+      log(`Error saying Agent: ${err.message}`);
+      sayAgentBtn.disabled = false;
+      sayAgentBtn.textContent = '🗣️ Say "Agent"';
+    }
+  };
 
   // Handle Enter key in phone input
   phoneInp.addEventListener('keydown', (e) => {
@@ -934,6 +1804,7 @@
       handleCallStart();
     }
   });
+  
   
   /* Phonebook Management */
   const loadPhonebook = () => {
@@ -1038,52 +1909,115 @@
     }
   };
   
-  /* Copy and Clear Transcript Handlers */
-  copyTranscriptBtn.onclick = async () => {
-    const items = transcriptions.querySelectorAll('.transcription-item');
-    if (items.length === 0) {
-      alert('No transcript to copy');
-      return;
-    }
+  /* Copy and Clear Transcript Handlers - Disabled since we're using recordings instead */
+  // Transcript functionality has been replaced with recording functionality
+  
+  // Recordings button handlers
+  const viewRecordingsBtn = $('viewRecordings');
+  const recordingsList = $('recordingsList');
+  const closeRecordingsBtn = $('closeRecordings');
+  const recordingsContent = $('recordingsContent');
+  
+  viewRecordingsBtn.onclick = () => {
+    // Show recordings list
+    recordingsList.style.display = 'block';
     
-    let text = 'DMV Call Transcript\n';
-    text += '===================\n\n';
-    
-    // Group consecutive similar transcripts
-    let lastContent = '';
-    items.forEach(item => {
-      const time = item.querySelector('.time')?.textContent || '';
-      const content = item.querySelector('.stable, .unstable, .system')?.textContent || '';
-      
-      // Skip if it's a minor variation of the previous line
-      if (content && content !== lastContent) {
-        text += `${time} ${content}\n`;
-        lastContent = content;
-      }
-    });
-    
-    text += '\n\nCall Details:\n';
-    text += `Status: ${statusTitle.textContent}\n`;
-    text += `DMV Status: ${dmvStatusValue.textContent}\n`;
-    text += `Human Agent: ${humanStatusValue.textContent}\n`;
-    text += `Duration: ${callTimer.textContent}\n`;
-    
-    try {
-      await navigator.clipboard.writeText(text);
-      copyTranscriptBtn.textContent = '✅ Copied!';
-      setTimeout(() => {
-        copyTranscriptBtn.textContent = '📋 Copy';
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-      alert('Failed to copy transcript');
+    // Display recordings
+    if (window.callRecordings && window.callRecordings.length > 0) {
+      recordingsContent.innerHTML = '';
+      window.callRecordings.forEach((recording, index) => {
+        const div = document.createElement('div');
+        div.className = 'recording-item';
+        const date = new Date(recording.timestamp).toLocaleString();
+        div.innerHTML = `
+          <div class="recording-date">${date}</div>
+          <div class="recording-duration">Duration: ${recording.duration}s</div>
+          <div class="recording-actions">
+            <button onclick="window.open('${recording.url}.mp3', '_blank')">🎵 Play</button>
+            <button onclick="window.open('${recording.url}', '_blank')">💾 Download</button>
+          </div>
+        `;
+        recordingsContent.appendChild(div);
+      });
+    } else {
+      recordingsContent.innerHTML = '<div class="recordings-placeholder">No recordings yet</div>';
     }
   };
   
-  clearTranscriptBtn.onclick = () => {
-    if (confirm('Clear all transcripts?')) {
-      transcriptions.innerHTML = '<div class="transcript-placeholder">Transcripts will appear here when a call is active...</div>';
-      log('Transcripts cleared');
+  closeRecordingsBtn.onclick = () => {
+    recordingsList.style.display = 'none';
+  };
+  
+  /* Call Notes Handlers */
+  // Auto-save notes to localStorage
+  callNotesTextarea.addEventListener('input', () => {
+    localStorage.setItem('dialbot-call-notes', callNotesTextarea.value);
+  });
+  
+  // Load saved notes on startup
+  const savedNotes = localStorage.getItem('dialbot-call-notes');
+  if (savedNotes) {
+    callNotesTextarea.value = savedNotes;
+  }
+  
+  // Copy notes
+  copyNotesBtn.onclick = async () => {
+    const notes = callNotesTextarea.value;
+    if (!notes.trim()) {
+      alert('No notes to copy');
+      return;
+    }
+    
+    try {
+      await navigator.clipboard.writeText(notes);
+      copyNotesBtn.textContent = '✅ Copied!';
+      setTimeout(() => {
+        copyNotesBtn.textContent = '📋 Copy';
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy notes:', err);
+      alert('Failed to copy notes');
+    }
+  };
+  
+  // Export notes as .txt file
+  exportNotesBtn.onclick = () => {
+    const notes = callNotesTextarea.value;
+    if (!notes.trim()) {
+      alert('No notes to export');
+      return;
+    }
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const filename = `dialbot-notes-${timestamp}.txt`;
+    
+    // Add call information to the export
+    let exportContent = `DialBot Call Notes\n`;
+    exportContent += `==================\n\n`;
+    exportContent += `Date: ${new Date().toLocaleString()}\n`;
+    if (lastNumber) exportContent += `Number Called: ${lastNumber}\n`;
+    exportContent += `\nNotes:\n------\n${notes}`;
+    
+    // Create blob and download
+    const blob = new Blob([exportContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    log(`Notes exported as ${filename}`);
+  };
+  
+  // Clear notes
+  clearNotesBtn.onclick = () => {
+    if (callNotesTextarea.value.trim() && confirm('Clear all notes?')) {
+      callNotesTextarea.value = '';
+      localStorage.removeItem('dialbot-call-notes');
+      log('Notes cleared');
     }
   };
 })();
